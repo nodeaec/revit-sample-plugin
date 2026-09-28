@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Sample Plugin add-in manifest.
+
+  Install layout (per RevitYear, mirrors the Node.aec Connector convention of a
+  manifest at the Addins folder root + payload in a subfolder):
+
+    %ProgramData%\Autodesk\Revit\Addins\<year>\SamplePlugin.addin          (this file)
+    %ProgramData%\Autodesk\Revit\Addins\<year>\SamplePlugin\SamplePlugin.dll
+
+  <Assembly> is relative to the location of THIS manifest file. When a packaging
+  script rewrites it to an absolute path (as scripts/release.ps1 does for the
+  connector), keep the target identical: ...\Addins\<year>\SamplePlugin\SamplePlugin.dll
+
+  <AddInId> is unique to this add-in (generated fresh for the sample; never reuse
+  the connector's GUID). <FullClassName> must match the IExternalApplication in
+  App.cs — the IExternalCommand is reached through the Ribbon button, so it does
+  not need its own manifest entry.
+-->
+<RevitAddIns>
+  <AddIn Type="Application">
+    <Name>Sample Plugin</Name>
+    <Assembly>SamplePlugin\SamplePlugin.dll</Assembly>
+    <AddInId>B6BD6575-DBB6-412A-A5EA-0843ABE8D9B6</AddInId>
+    <FullClassName>SamplePlugin.App</FullClassName>
+    <VendorId>NODEAEC</VendorId>
+    <VendorDescription>Node.aec — https://nodeaec.com.br</VendorDescription>
+  </AddIn>
+</RevitAddIns>

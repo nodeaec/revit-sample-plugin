@@ -1,0 +1,119 @@
+<Project>
+  <!--
+    ============================================================================
+    Sample Plugin — reference add-in showing the Node.aec licensing integration
+    (NodeAecGate) inside a third-party Autodesk Revit plugin.
+
+    Revit-year matrix (mirrors revit-connector/Directory.Build.props, simplified):
+      2023 | 2024 -> net48
+      2025 | 2026 -> net8.0-windows   (2026 stays on net8 on purpose: Nice3point
+                                       ships no net10 package for 2026, and a
+                                       net8 add-in loads in the 2026.5 net10 host,
+                                       while the reverse fails in 2026.0-2026.4)
+      2027        -> net10.0-windows
+
+    Build:
+      dotnet build src/SamplePlugin/SamplePlugin.csproj -p:RevitYear=2026   # default
+      dotnet build src/SamplePlugin/SamplePlugin.csproj -p:RevitYear=2023   # net48
+      dotnet build src/SamplePlugin/SamplePlugin.csproj -p:RevitYear=2027   # net10
+
+    This project uses the explicit SDK-import form (Sdk.props / Sdk.targets)
+    instead of the Project Sdk attribute so the matrix above is evaluated BEFORE
+    the SDK is imported — the same ordering Directory.Build.props provides in the
+    connector repo. BaseIntermediateOutputPath MUST be set that early; keep the
+    imports if you edit this file.
+    ============================================================================
+  -->
+  <PropertyGroup>
+    <RevitYear Condition="'$(RevitYear)' == ''">2026</RevitYear>
+
+    <!-- Nice3point Revit API packages: one pinned version per Revit year (same pins as the connector). -->
+    <RevitApiPkgVersion Condition="'$(RevitYear)' == '2023'">2023.1.90</RevitApiPkgVersion>
+    <RevitApiPkgVersion Condition="'$(RevitYear)' == '2024'">2024.3.60</RevitApiPkgVersion>
+    <RevitApiPkgVersion Condition="'$(RevitYear)' == '2025'">2025.4.60</RevitApiPkgVersion>
+    <RevitApiPkgVersion Condition="'$(RevitYear)' == '2026'">2026.4.10</RevitApiPkgVersion>
+    <RevitApiPkgVersion Condition="'$(RevitYear)' == '2027'">2027.2.0</RevitApiPkgVersion>
+
+    <!-- TFM per Revit year (see rationale in the header comment). -->
+    <TargetFramework Condition="'$(RevitYear)' == '2023' or '$(RevitYear)' == '2024'">net48</TargetFramework>
+    <TargetFramework Condition="'$(RevitYear)' == '2025' or '$(RevitYear)' == '2026'">net8.0-windows</TargetFramework>
+    <TargetFramework Condition="'$(RevitYear)' == '2027'">net10.0-windows</TargetFramework>
+
+    <!-- Year constant for #if REVIT2023..REVIT2027 source guards. -->
+    <DefineConstants>REVIT$(RevitYear);$(DefineConstants)</DefineConstants>
+
+    <!--
+      .NET Framework reference assemblies are nullable-oblivious: guards such as
+      string.IsNullOrEmpty(...) carry no [NotNullWhen] annotation, so proven-safe
+      dereferences still report CS8602/CS8603/CS8604 — only on net48, where the
+      code compiles warning-free on net8/net10 with the same source. False
+      positives, suppressed for net48 only (same as the connector).
+    -->
+    <NoWarn Condition="'$(TargetFramework)' == 'net48'">$(NoWarn);CS8602;CS8603;CS8604</NoWarn>
+
+    <!-- Isolate intermediate/output folders per Revit year so looped builds never overwrite each other. -->
+    <BaseIntermediateOutputPath>obj\$(RevitYear)\</BaseIntermediateOutputPath>
+    <BaseOutputPath>bin\$(RevitYear)\</BaseOutputPath>
+    <!-- Once a second year has been built, sibling obj\2024\, obj\2025\, ... folders must not
+         leak into the default **/*.cs Compile glob (duplicate AssemblyInfo attributes, CS0579). -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);obj\**;bin\**</DefaultItemExcludes>
+
+    <!--
+      INTEGRATION CONTRACT (build-time reference to the installed connector).
+      Default = the connector's canonical runtime location for the selected year:
+        C:\ProgramData\Autodesk\Revit\Addins\<year>\NodeAec.Connector\NodeAec.Connector.dll
+      NOT a NuGet package, NOT a project reference. The DLL is never copied next to
+      this plugin (<Private>False</Private>): at runtime Revit has already loaded the
+      connector from its own add-in folder. Override NodeAecConnectorDll ONLY on CI
+      machines that validate compilation without the connector installed.
+    -->
+    <NodeAecConnectorDll Condition="'$(NodeAecConnectorDll)' == ''">$(ProgramData)\Autodesk\Revit\Addins\$(RevitYear)\NodeAec.Connector\NodeAec.Connector.dll</NodeAecConnectorDll>
+  </PropertyGroup>
+
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>SamplePlugin</RootNamespace>
+    <AssemblyName>SamplePlugin</AssemblyName>
+    <Version>1.0.0</Version>
+    <Description>Sample Plugin — reference integration of Node.aec licensing (NodeAecGate) for Autodesk Revit.</Description>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <!-- Autodesk.Windows (AdWindows) surfaces WPF types; same flag the connector uses. -->
+    <UseWPF>true</UseWPF>
+    <!-- Dependency DLLs (not RevitAPI, not the connector) travel with the add-in. -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Revit API assemblies are provided by Revit at runtime: reference-only, never copied. -->
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPI" Version="$(RevitApiPkgVersion)" PrivateAssets="all" ExcludeAssets="runtime" />
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI" Version="$(RevitApiPkgVersion)" PrivateAssets="all" ExcludeAssets="runtime" />
+    <PackageReference Include="Nice3point.Revit.Api.AdWindows" Version="$(RevitApiPkgVersion)" PrivateAssets="all" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      The one connector reference of the whole plugin. Private=False: NodeAec.Connector.dll
+      must NEVER be copied beside the sample plugin — Revit loads it from the connector's
+      own add-in folder before this plugin's code runs. If the connector is not installed
+      at HintPath, the build reports an unresolved reference (install the connector first).
+    -->
+    <Reference Include="NodeAec.Connector">
+      <HintPath>$(NodeAecConnectorDll)</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Ship the manifest with the payload: packaging drops this file at
+         <year>\SamplePlugin.addin and the DLL at <year>\SamplePlugin\SamplePlugin.dll
+         (the relative Assembly path inside the manifest assumes exactly that layout). -->
+    <None Update="SamplePlugin.addin" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+</Project>
