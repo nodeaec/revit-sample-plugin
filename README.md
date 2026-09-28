@@ -1,278 +1,240 @@
-# Sample Plugin
+# revit-sample-plugin
 
-A tiny Revit plugin — one button, one command — that shows how to license-gate a command with the **Node.aec Connector**. Change exactly one constant (`sample-plugin`) and the pattern becomes yours.
+One Revit button that demonstrates how to sell through the Node.aec platform: without a valid license, the feature does not run.
 
----
+This README takes about five minutes. It explains what the sample does, how to run it, and how to apply the same pattern to your own plugin.
 
-## What is this
+## Contents
 
-**Sample Plugin** is the reference add-in for partner plugins on the Node.aec platform. It adds a single **Hello World** button to the shared **Node.aec** Ribbon tab (panel **Sample Plugin**) and does one interesting thing: it asks the local license gate before running anything.
+- [What this does](#what-this-does)
+- [How it works](#how-it-works)
+- [Try it in 5 minutes](#try-it-in-5-minutes)
+- [Make it yours](#make-it-yours)
+- [Let your agent do it](#let-your-agent-do-it)
+- [Troubleshooting](#troubleshooting)
+- [Project layout](#project-layout)
+- [What we validated](#what-we-validated)
+- [Links](#links)
+- [License](#license)
 
-The demo behavior:
+## What this does
 
-- **License valid and active** → you get `Hello, <user>!` plus an informative license card built from the real `GateResult` fields: **Product**, **Type**, **License key**, **Valid until** and **Status** (`NodeAecLicenseGate.BuildLicenseBlock`).
-- **Anything else** → a precise, fail-closed error. Not signed in, license expired, the product isn't in this account's entitlements, seat limit reached, offline grace over, or the connector isn't installed at all — the connector's own `Message` is shown verbatim, plus short guidance and an **Open Node.aec Connector...** action.
+**Sample Plugin** adds a single **Hello World** button to the shared **Node.aec** ribbon tab (panel **Sample Plugin**). Selecting it asks the Node.aec Connector whether this machine is entitled to run the [`revit-sample-plugin`](https://nodeaec.com.br/products/revit-sample-plugin) product.
 
-There is no path past the gate. Every non-licensed outcome ends in `Result.Cancelled` — the command never runs unlicensed.
+With a valid, active license, the command shows a greeting together with a license card: product name, license type, key, and expiry date.
+
+In any other case — not signed in, no entitlement for this product, expired license, seat limit reached, offline grace expired, or connector not installed — the command stops and explains why, with an action that opens the connector so the issue can be resolved. It never runs without a license.
 
 ## How it works
 
+Every command asks the gate first and honors the answer.
+
 ```
-Hello World click
-  └─ SamplePlugin.Commands.HelloCommand.Execute (first statement)
-       └─ NodeAecLicenseGate.Validate()            → GateSnapshot (never throws)
-            └─ NodeAecGate.Validate("sample-plugin")  local disk + DPAPI + Ed25519, zero network
-                 ├─ IsLicensed == true  → greeting + license card → Result.Succeeded
-                 └─ IsLicensed == false → blocked dialog (Message verbatim + action) → Result.Cancelled
+Click Hello World
+  -> SamplePlugin.Commands.HelloCommand runs NodeAecLicenseGate.Validate()
+       -> local license read, no network
+            -> licensed:    greeting + license card, Result.Succeeded
+            -> not licensed: reason + guidance + open-connector action, Result.Cancelled
 ```
 
-`GateSnapshot` is a plugin-local, connector-free mirror of the gate outcome, so a machine *without* the connector still fails closed with this plugin's own dialog instead of a load crash.
+The gate returns a snapshot with six fields (`IsLicensed`, `LicenseType`, `LicenseKey`, `ProductName`, `ExpiresAt`, `Message`). Commands branch on `IsLicensed` only; the remaining fields are display text.
 
-| Gate outcome | What the user sees |
-|---|---|
-| `IsLicensed == true` | `Hello World` dialog + license card: Product / Type / License key / Valid until / Status |
-| Not signed in (or never authenticated) | `Nenhuma credencial do Node.aec encontrada nesta estação…` + guidance + **Open Node.aec Connector...** → `Result.Cancelled` |
-| License or trial expired | `A licença ou período de teste de '{Name}' expirou em {dd/MM/yyyy}.` → `Result.Cancelled` |
-| Product not entitled / wrong slug | `O produto 'sample-plugin' não consta nas licenças ativas desta conta…` → `Result.Cancelled` |
-| Seat limit reached | `O limite de computadores simultâneos para '{Name}' foi atingido.` → `Result.Cancelled` |
-| Offline grace expired | `O prazo de tolerância offline expirou em {dd/MM/yyyy}…` → `Result.Cancelled` |
-| Connector not installed / not loadable | Seam's own `ConnectorUnavailableMessage` (English, `ConnectorAvailable = false`) → same blocked dialog → `Result.Cancelled` |
+The other half of this picture is the [Node.aec Connector](https://nodeaec.com.br/products/nodeaec-connector) ([source](https://github.com/nodeaec/revit-connector)): the installed desktop hub responsible for sign-in, license synchronization, the gate itself, and the shared ribbon tab. This plugin only queries it.
 
-Full taxonomy of the 17 failure texts plus the success text: [API.md §5 — Status / reason taxonomy](API.md#5-status--reason-taxonomy).
+The full list of license outcomes is documented in [API.md §5 — Status / reason taxonomy](API.md#5-status--reason-taxonomy). The sample handles every outcome with the same blocked dialog, so there is no need to memorize the list.
 
-## Try it
+## Try it in 5 minutes
 
-**Prerequisites**
+Prerequisites: Revit 2023–2027, the [Node.aec Connector](https://nodeaec.com.br/products/nodeaec-connector) installed for that Revit year ([source](https://github.com/nodeaec/revit-connector)), and a connector session signed in and entitled to [`revit-sample-plugin`](https://nodeaec.com.br/products/revit-sample-plugin). Without the connector, start from the [product page](https://nodeaec.com.br/products/nodeaec-connector) — the steps below assume it is installed.
 
-1. **Revit 2023–2027** (this sample builds for all five years).
-2. **Node.aec Connector installed** for that Revit year — it owns sign-in, entitlements and the gate.
-3. **Signed in** in the connector and **entitled** to the `sample-plugin` product.
-
-**Build** ([API.md §8 — Versioning & compatibility matrix](API.md#8-versioning--compatibility-matrix)):
+**1. Build.** Defaults to Revit 2026 ([API.md §8 — Versioning & compatibility matrix](API.md#8-versioning--compatibility-matrix)):
 
 ```bash
-# The matrix, verbatim from API.md §8.1 — default is 2026
-dotnet build -p:RevitYear=<2023..2027>
+dotnet build src/SamplePlugin/SamplePlugin.csproj -p:RevitYear=2026
+dotnet build src/SamplePlugin/SamplePlugin.csproj -p:RevitYear=2023   # net48
+dotnet build src/SamplePlugin/SamplePlugin.csproj -p:RevitYear=2027   # net10
+```
 
-# Machine without the connector installed: point the reference at any NodeAec.Connector.dll
+On a machine without the connector, point at any same-year copy to verify compilation:
+
+```bash
 dotnet build src/SamplePlugin/SamplePlugin.csproj -p:RevitYear=2026 -p:NodeAecConnectorDll=<path-to-NodeAec.Connector.dll>
 ```
 
-| `RevitYear` | 2023 | 2024 | 2025 | 2026 | 2027 |
-|---|---|---|---|---|---|
-| Target framework | `net48` | `net48` | `net8.0-windows` | `net8.0-windows` | `net10.0-windows` |
+| Revit year | 2023–2024 | 2025–2026 | 2027 |
+|---|---|---|---|
+| Target framework | `net48` | `net8.0-windows` | `net10.0-windows` |
 
-**Install** — the packaging contract from [API.md §3.3 — Packaging contract (manifest + payload layout)](API.md#33-packaging-contract-manifest--payload-layout--verified):
+**2. Install.** Copy two files per [API.md §3.3](API.md#33-packaging-contract-manifest--payload-layout--verified):
 
 ```
-%ProgramData%\Autodesk\Revit\Addins\<year>\SamplePlugin.addin            ← from bin\<year>\...\ (root)
-%ProgramData%\Autodesk\Revit\Addins\<year>\SamplePlugin\SamplePlugin.dll ← payload subfolder
+%ProgramData%\Autodesk\Revit\Addins\<year>\SamplePlugin.addin
+%ProgramData%\Autodesk\Revit\Addins\<year>\SamplePlugin\SamplePlugin.dll
 ```
 
-`<Assembly>` in the manifest is `SamplePlugin\SamplePlugin.dll`, relative to the manifest — that layout is what the relative path assumes. Never ship `NodeAec.Connector.dll` or `RevitAPI*.dll` beside your plugin.
+Do not ship `NodeAec.Connector.dll` or `RevitAPI*.dll` alongside your plugin.
 
-**Launch** Revit, open the **Node.aec** tab, click **Hello World** in the **Sample Plugin** panel. Licensed → greeting + card; not licensed → the blocked dialog with an open-connector action.
+**3. Run.** Open Revit, open the **Node.aec** tab, and select **Hello World** in the **Sample Plugin** panel. A licensed session shows the greeting; any other state shows the blocked dialog.
 
-## Integrate your own plugin with Node.aec
+## Make it yours
 
-Eight steps. Each one is a change you can lift straight out of this repo, with the matching [API.md](API.md) section for the details and the edge cases.
+The same eight steps apply to any plugin. Each step below shows the change, a short excerpt from this repo, and the API.md section with full details and edge cases.
 
-**1. Understand the split.** The platform/connector owns accounts, lease sync and validation; your plugin only calls the gate at command entry. Nothing else in your codebase should ever touch licensing decisions — or the network.
+**1. Understand the responsibility split.** The connector handles sign-in, lease synchronization, and license decisions. Your plugin declares a product slug and queries the gate at command entry. It performs no licensing logic and makes no network calls. Details: [API.md §1 — Overview & responsibility split](API.md#1-overview--responsibility-split)
 
 ```csharp
-/// THE integration seam of this sample: everything the plugin knows about Node.aec
-/// licensing lives in this file. Port it to your own plugin, change
-/// <see cref="ProductSlug"/>, and keep the rest of your code connector-free.
+// All licensing knowledge in this sample lives in one file:
+// src/SamplePlugin/Licensing/NodeAecLicenseGate.cs — port it and keep the rest connector-free.
 ```
-→ [API.md §1 — Overview & responsibility split](API.md#1-overview--responsibility-split)
+Source: [NodeAecLicenseGate.cs:L8-L11](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/Licensing/NodeAecLicenseGate.cs#L8-L11)
 
-**2. Register your product slug.** Your product gets a slug in the Node.aec catalog; it is the single constant this sample changes. Match is `Trim()` + case-insensitive against the entitlement claim `slug`.
+**2. Register your product slug.** Register your product in the [Node.aec catalog](https://nodeaec.com.br/products) to receive a slug. That slug becomes the single constant you change in the ported file (the sample uses [`revit-sample-plugin`](https://nodeaec.com.br/products/revit-sample-plugin)). Details: [API.md §4 — Public integration surface](API.md#4-public-integration-surface)
 
 ```csharp
-public static class NodeAecLicenseGate
-{
-    /// THE one constant to change when adapting this sample to another product:
-    /// the product slug as registered in the Node.aec catalog / entitlement claims.
-    public const string ProductSlug = "sample-plugin";
+public const string ProductSlug = "revit-sample-plugin"; // replace with your slug
 ```
-→ [API.md §4 — Public integration surface](API.md#4-public-integration-surface)
+Source: [NodeAecLicenseGate.cs:L30](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/Licensing/NodeAecLicenseGate.cs#L30)
 
-**3. Add the reference.** Build-time `Reference` + `HintPath` + `<Private>False</Private>` against the *installed* connector — not NuGet, not a project reference, never a copied DLL.
+**3. Reference the installed connector.** Add a build-time reference to the connector DLL at its installed location. Do not use NuGet or a project reference, and do not copy the DLL into your plugin folder. Details: [API.md §3 — The integration path (authoritative)](API.md#3-the-integration-path-authoritative)
 
 ```xml
-<NodeAecConnectorDll Condition="'$(NodeAecConnectorDll)' == ''">$(ProgramData)\Autodesk\Revit\Addins\$(RevitYear)\NodeAec.Connector\NodeAec.Connector.dll</NodeAecConnectorDll>
-...
 <Reference Include="NodeAec.Connector">
   <HintPath>$(NodeAecConnectorDll)</HintPath>
   <Private>False</Private>
 </Reference>
 ```
-→ [API.md §3 — The integration path (authoritative)](API.md#3-the-integration-path-authoritative)
+Source: [SamplePlugin.csproj:L105-L107](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/SamplePlugin.csproj#L105-L107) (path property at [L70](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/SamplePlugin.csproj#L70))
 
-**4. Port the licensing seam.** Copy `NodeAecLicenseGate.cs` verbatim, change `ProductSlug`. It maps `GateResult`'s six members into a plain `GateSnapshot` and isolates every connector-type reference so a missing DLL becomes a fail-closed snapshot, not a crash.
+**4. Port the licensing seam.** Copy `NodeAecLicenseGate.cs` unchanged except for the slug. Its wrapper methods isolate every connector-type reference so that a missing connector produces a clean denial rather than a crash. Details: [API.md §9 — Fail-closed recipe](API.md#9-fail-closed-recipe-nodeaeclicensegatecs)
 
 ```csharp
 public static GateSnapshot Validate()
 {
-    try { return RunValidation(); }   // a JIT load failure of NodeAec.Connector lands HERE
-    catch (Exception) { return new GateSnapshot(isLicensed: false, message: ConnectorUnavailableMessage,
-        productName: null, licenseType: null, licenseKey: null, expiresAt: null, connectorAvailable: false); }
+    try { return RunValidation(); }
+    catch (Exception) { return new GateSnapshot(isLicensed: false, message: ConnectorUnavailableMessage, ...); }
 }
 ```
-→ [API.md §9 — Fail-closed recipe (`NodeAecLicenseGate.cs`)](API.md#9-fail-closed-recipe-nodeaeclicensegatecs)
+Source: [NodeAecLicenseGate.cs:L46-L65](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/Licensing/NodeAecLicenseGate.cs#L46-L65) (isolation helper at [L74-L86](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/Licensing/NodeAecLicenseGate.cs#L74-L86))
 
-**5. Gate every command.** First statement of `Execute`, once per execution — never inside per-element loops. Branch on `IsLicensed` only; anything unknown or null fails closed.
+**5. Gate every command.** Call `Validate()` as the first statement of each command, once per execution, and branch only on `IsLicensed`. Place nothing — no dialogs, no transactions — before the gate, and avoid calling it inside per-element loops since each call performs disk I/O. Treat any exception or unknown state as not licensed: an error must never become a pass. Details: [API.md §2 — Quickstart](API.md#2-quickstart-happy-path) and [§7 — Threading rules](API.md#7-threading--revit-api-context-rules)
 
 ```csharp
-gate = NodeAecLicenseGate.Validate();          // first statement of the command
-...
-if (!gate.IsLicensed)
-{
-    ShowBlockedDialog(gate);                   // Message verbatim + guidance + action
-    return Result.Cancelled;                   // no code path past the gate
-}
+var gate = NodeAecLicenseGate.Validate();
+if (!gate.IsLicensed) { ShowBlockedDialog(gate); return Result.Cancelled; }
 ```
-→ [API.md §2 — Quickstart (happy path)](API.md#2-quickstart-happy-path) and [§7 — Threading & Revit API-context rules](API.md#7-threading--revit-api-context-rules)
+Source: [HelloCommand.cs:L40-L63](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/Commands/HelloCommand.cs#L40-L63)
 
-**6. Place your ribbon under the shared tab.** One shared `Node.aec` tab, your own panel and button inside it — never a plugin-owned tab. Tab creation tolerates only the "already exists" `ArgumentException`, panel/button insertion is idempotent, and two AdWindows hooks re-run a local, connector-free dedup.
+**6. Place your UI under the shared tab.** Add your own panel and button inside the shared `Node.aec` tab; do not create a plugin-owned tab. Tab creation is defensive: the "already exists" case is expected when the connector created the tab first. Details: [API.md §6 — Ribbon integration conventions](API.md#6-ribbon-integration-conventions)
 
 ```csharp
-try { application.CreateRibbonTab(TabName); }
+try { application.CreateRibbonTab("Node.aec"); }
 catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ArgumentException || ex is ArgumentException)
-{ /* the connector already created it — normal */ }
-
-var found = existing.FirstOrDefault(p => string.Equals(p.Name, panelName, StringComparison.OrdinalIgnoreCase));
-if (found != null) return found;               // idempotent: reuse instead of duplicating
+{ /* already exists — normal */ }
 ```
-→ [API.md §6 — Ribbon integration conventions](API.md#6-ribbon-integration-conventions)
+Source: [App.cs:L100](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/App.cs#L100) (panel at [L118-L130](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/App.cs#L118-L130), hooks at [L175-L179](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/App.cs#L175-L179))
 
-**7. Handle failures with actionable messages + `OpenConnector()`.** Show the connector's `Message` verbatim (never string-match or translate it), add short guidance, offer an action link, then `Result.Cancelled`. `OpenConnector()` is a silent no-op when the connector is absent — your dialog must carry the guidance on its own.
+**7. Present failures with guidance.** Display the connector message verbatim, add a brief note on what to do next, and offer the action that opens the connector. Note that `OpenConnector()` is a silent no-op when the connector UI is unreachable, so the dialog itself must contain the guidance. Details: [API.md §5 — Status / reason taxonomy](API.md#5-status--reason-taxonomy)
 
 ```csharp
-var dialog = new TaskDialog(BlockedTitle)
-{
-    MainInstruction = "Sample Plugin requires an active Node.aec license.",
-    MainContent = $"Reason reported by Node.aec:\n{gate.Message}\n\n" + /* short guidance bullets */,
-    CommonButtons = TaskDialogCommonButtons.Close
-};
 dialog.AddCommandLink(TaskDialogCommandLinkId.CommandLink1, "Open Node.aec Connector...");
 if (dialog.Show() == TaskDialogResult.CommandLink1) NodeAecLicenseGate.OpenConnector();
 ```
-→ [API.md §5 — Status / reason taxonomy](API.md#5-status--reason-taxonomy)
+Source: [HelloCommand.cs:L128-L133](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/Commands/HelloCommand.cs#L128-L133)
 
-**8. Validate with the manual test protocol.** Walk the taxonomy in a real Revit session: signed out, expired, wrong slug, seat limit, offline grace, connector uninstalled — each must produce the blocked dialog + `Result.Cancelled`, and only a healthy license may reach the greeting. DPAPI needs an interactive logon session, so headless CI cannot prove this part.
+**8. Validate manually in Revit.** Exercise the failure states in a real Revit session: signed out, expired, wrong slug, and connector missing. Each must block the command; only a healthy license may reach the feature. This step is manual because the underlying storage requires an interactive login session. Details: [API.md §10 — Troubleshooting / FAQ](API.md#10-troubleshooting--faq)
 
 ```csharp
-string content =
-    $"Hello, {Environment.UserName}!\n\n" +
-    "Sample Plugin verified your Node.aec license locally (no network call) and is ready to run.\n\n" +
-    NodeAecLicenseGate.BuildLicenseBlock(gate);
-TaskDialog.Show(Title, content);
-return Result.Succeeded;                       // only reachable with IsLicensed == true
+TaskDialog.Show(Title, $"Hello, {Environment.UserName}!\n\n" + NodeAecLicenseGate.BuildLicenseBlock(gate));
+return Result.Succeeded; // reachable only when licensed
 ```
-→ [API.md §10 — Troubleshooting / FAQ](API.md#10-troubleshooting--faq) and [§12 — Verification & related documents](API.md#12-verification--related-documents)
+Source: [HelloCommand.cs:L65-L73](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/Commands/HelloCommand.cs#L65-L73)
 
-## Let your agent do it for you
+## Let your agent do it
 
-Copy-paste this into your coding agent, from inside your own plugin repo:
+Point your coding agent at this repo. It should read the agent brief, the installable skill, then the reference — in that order.
 
-```AGENT PROMPT
+<details>
+<summary>Copy-paste agent prompt (click to expand)</summary>
+
+```text
 You are integrating the Node.aec Connector license gate into my Revit plugin.
 
-Repo to learn from: https://github.com/nodeaec/revit-sample-plugin
-Read, in this order, before writing any code:
+Learn from https://github.com/nodeaec/revit-sample-plugin — read first:
   1. AGENTS.md
   2. .agents/skills/nodeaec-connector-integration/SKILL.md
-  3. API.md  (the authoritative reference — follow its section titles; do not invent API)
+  3. API.md (authoritative; follow its section titles, do not invent API)
 
-Target repo (mine): <your-plugin-repo>
+My repo: <your-plugin-repo>
 
-Confirm this prerequisite checklist FIRST — stop and ask me if any item is unresolved:
-  [ ] Target Revit year chosen (2023, 2024, 2025, 2026 or 2027) and its TFM known
-      (2023/2024 = net48, 2025/2026 = net8.0-windows, 2027 = net10.0-windows)
-  [ ] Node.aec Connector installed for that year at
-      %ProgramData%\Autodesk\Revit\Addins\<year>\NodeAec.Connector\NodeAec.Connector.dll
-  [ ] My product slug, registered in the Node.aec catalog: <your-product-slug>
-  [ ] A signed-in connector session entitled to that slug, for manual verification
-  [ ] My plugin's commands are reachable from Ribbon buttons I control
+Confirm before writing code — stop and ask if anything is unresolved:
+  - Target Revit year (2023–2027) and its framework (2023/24 net48, 2025/26 net8.0-windows, 2027 net10.0-windows)
+  - Connector installed for that year, and a signed-in session entitled to my slug
+  - My catalog slug: <your-product-slug>
+  - Which commands need gating (answer: all of them)
 
-Then perform the integration in <your-plugin-repo>:
-  1. Add the build-time Reference + HintPath + <Private>False</Private> for NodeAec.Connector
-     (API.md §3). NOT NuGet, NOT a ProjectReference, NEVER copy the DLL.
-  2. Port src/SamplePlugin/Licensing/NodeAecLicenseGate.cs unchanged except
-     ProductSlug = "<your-product-slug>" (API.md §9).
-  3. In EVERY IExternalCommand, call NodeAecLicenseGate.Validate() as the first statement,
-     branch only on snapshot.IsLicensed, show Message verbatim + guidance +
-     NodeAecLicenseGate.OpenConnector() on failure, and return Result.Cancelled (API.md §2, §7).
-  4. On success, keep feature code behind the gate; use BuildLicenseBlock-style display
-     only from the snapshot's six fields — never invent fields the connector does not expose.
-  5. Put my button in the shared Node.aec tab as my own panel: idempotent tab/panel/button
-     insertion, filtered ArgumentException catch, "-=" before "+=" AdWindows hooks, local
-     connector-free dedup (API.md §6). No plugin-owned tab.
-  6. Keep my add-in startup connector-free (no Node.aec types in IExternalApplication).
-  7. Build with -p:RevitYear=<year> for every year I support (API.md §8); on machines
-     without the connector use -p:NodeAecConnectorDll=<path>.
-  8. Report exactly what you changed, file by file, and list the manual test protocol cases
-     I still have to run in Revit (API.md §10) — do not claim runtime verification you
-     cannot perform.
+Then: add the Reference + HintPath + Private False (API.md §3); port
+NodeAecLicenseGate.cs changing only ProductSlug (API.md §9); gate every
+command on IsLicensed with the blocked dialog + OpenConnector + Cancelled
+(API.md §2, §5, §7); place my panel under the shared Node.aec tab with
+idempotent inserts (API.md §6); build the RevitYear matrix (API.md §8);
+report file-by-file changes plus the manual cases I must still run in Revit.
 
-Rules: never weaken the gate, never cache a licensed result across commands, never
-string-match Message, never translate it in code, never add HTTP calls.
+Rules: never weaken the gate, never invent GateResult fields, never match on
+message text, never add HTTP calls or login UI.
 ```
 
-**Installing the skill:** this repo ships `.agents/skills/nodeaec-connector-integration/SKILL.md`. Copy that folder into your repo's `.agents/skills/` directory (so every clone of your repo gets it) or into your agent's global skills directory, and it will load automatically when your agent works on Node.aec integration tasks. [AGENTS.md](AGENTS.md) is the always-on companion brief for agents in this repo.
+</details>
+
+To install the skill, copy `.agents/skills/nodeaec-connector-integration/` into your repo's `.agents/skills/` folder (or your agent's global skills directory). `AGENTS.md` is the companion brief for agents working here.
 
 ## Troubleshooting
 
-Grounded in [API.md §5 — Status / reason taxonomy](API.md#5-status--reason-taxonomy) and [§10 — Troubleshooting / FAQ](API.md#10-troubleshooting--faq).
+Plain-English symptoms; fixes grounded in [API.md §5](API.md#5-status--reason-taxonomy) and [§10](API.md#10-troubleshooting--faq). Connector messages are Portuguese verbatim — shown as-is in the dialog, never translated in code.
 
-| Symptom (verbatim message or seam text) | Cause | Fix |
-|---|---|---|
-| `The Node.aec Connector could not be loaded on this station.` | Connector not installed for this Revit year, or not loadable — the seam never reaches the gate (`ConnectorAvailable = false`) | Install/repair the connector for that year; verify `Addins\<year>\NodeAec.Connector\NodeAec.Connector.dll` exists. Do **not** copy the DLL into your add-in folder |
-| `Nenhuma credencial do Node.aec encontrada nesta estação…` | Not signed in — never logged in, logged out, or lease file cleared (this same text also appears when the connector was never installed) | Open the Node.aec Connector and sign in / activate a license key, then re-run the command |
-| `O produto '{productSlug}' não consta nas licenças ativas desta conta.` | No entitlement for the slug — not purchased/activated, or `ProductSlug` doesn't match the catalog (match is `Trim()` + case-insensitive) | Buy/activate the product in the Node.aec catalog, or fix your `ProductSlug` constant |
-| `A licença ou período de teste de '{Name}' expirou em {dd/MM/yyyy}.` | Entitlement `expiresAt` is in the past | Renew in the Node.aec portal, then let the connector synchronize |
-| `O limite de computadores simultâneos para '{Name}' foi atingido.` | Seat limit — entitlement `status == "seat_limit_reached"` | Free a seat for this product in the web portal, then revalidate |
-| `O prazo de tolerância offline expirou em {dd/MM/yyyy}. Conecte-se à internet para sincronizar.` | Offline grace (default 30 days) expired — lease `exp` is past | Go online and click **Atualizar** in the connector to resync the lease |
-| `O produto 'sample-plugin' não consta…` while you expected a license | Wrong slug — your constant doesn't equal the catalog slug | Fix `ProductSlug`; catalog link helper: `ProductLinks.BuildProductUrl(slug)` |
-| `A licença local não passou na verificação de segurança…` / `Origem da licença local desconhecida…` | Lease failed Ed25519/`iss`/`scope`/`aud` verification — tampered, foreign or stale lease | Go online and click **Atualizar** in the connector to resync |
-| `Não foi possível verificar a licença local.` | Unexpected exception inside the gate (logged `ERROR`) | Open `%APPDATA%\NodeAec\connector.log`, then resync in the connector |
-| Two `Node.aec` tabs after an add-in reload | Non-idempotent insertion or missing AdWindows hooks | Re-read [API.md §6](API.md#6-ribbon-integration-conventions): filtered `ArgumentException`, acquire-or-create panel, `-=` before `+=`, local `DeduplicateTab()` |
-| Nothing happens when the user clicks "Open Node.aec Connector..." | By contract `OpenConnector()` silently no-ops when the connector UI can't be reached | Expected — your dialog must already carry the guidance |
+| Symptom | Fix |
+|---|---|
+| Not signed in (no credentials on this machine) | Open the connector, sign in or activate a key, re-run |
+| Product not in this account's entitlements (often a wrong slug) | Buy/activate it, or fix your `ProductSlug` constant |
+| License or trial expired | Renew in the Node.aec portal, let the connector sync |
+| Seat limit reached | Free a seat in the web portal, then re-run |
+| Offline grace expired | Go online, click sync in the connector, re-run |
+| Connector not installed for this Revit year | Get it from the [product page](https://nodeaec.com.br/products/nodeaec-connector) ([source](https://github.com/nodeaec/revit-connector)), install/repair it for that year; do not copy its DLL into your folder |
+| Two `Node.aec` tabs after reload | Re-read [API.md §6](API.md#6-ribbon-integration-conventions): idempotent panel/button inserts plus the AdWindows hooks |
+| Open-connector button seems to do nothing | Expected when the connector UI is unreachable — `OpenConnector()` is a silent no-op by contract, so the dialog already carries the guidance |
 
 ## Project layout
 
 ```
 revit-sample-plugin/
-├── API.md                                     ← authoritative integration reference
-├── AGENTS.md                                  ← brief for coding agents working this repo
-├── README.md                                  ← you are here
+├── API.md                  full integration reference (start at §1)
+├── AGENTS.md               brief for coding agents working in this repo
+├── README.md               you are here
 ├── LICENSE
 ├── .agents/skills/nodeaec-connector-integration/
-│   ├── SKILL.md                                ← installable skill for agent-assisted integration
-│   └── references/                             ← depth behind the skill (seam walkthrough, test script)
+│   ├── SKILL.md            installable agent skill
+│   └── references/         seam walkthrough + manual test script
 └── src/SamplePlugin/
-    ├── SamplePlugin.csproj                    ← RevitYear matrix, the one connector Reference
-    ├── SamplePlugin.addin                     ← manifest (Assembly = SamplePlugin\SamplePlugin.dll)
-    ├── App.cs                                 ← Ribbon: shared Node.aec tab, panel, button, dedup hooks
-    ├── Commands/
-    │   └── HelloCommand.cs                    ← gate first, then greet — the whole demo
-    └── Licensing/
-        └── NodeAecLicenseGate.cs              ← THE seam: Validate(), OpenConnector(), BuildLicenseBlock()
+    ├── [SamplePlugin.csproj](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/SamplePlugin.csproj) RevitYear matrix + the one connector reference
+    ├── [SamplePlugin.addin](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/SamplePlugin.addin)  manifest (Assembly = SamplePlugin\SamplePlugin.dll)
+    ├── [App.cs](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/App.cs)              shared Node.aec tab, panel, button, dedup hooks
+    ├── Commands/[HelloCommand.cs](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/Commands/HelloCommand.cs)   gate first, then greet
+    └── Licensing/[NodeAecLicenseGate.cs](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/Licensing/NodeAecLicenseGate.cs)   Validate(), OpenConnector(), BuildLicenseBlock()
 ```
 
 ## What we validated
 
-- **Build matrix** — green for `RevitYear` 2023–2027 using the `-p:NodeAecConnectorDll=<path>` override on machines without the connector installed. Release outputs are on disk for 2023 (`net48`), 2026 (`net8.0-windows`, default) and 2027 (`net10.0-windows`); 2024 and 2025 share those two TFMs.
-- **Behavior in Revit** — verified **only** against the manual protocol (sign out, expired, wrong slug, seat limit, offline grace, connector missing → blocked dialog + `Result.Cancelled`; healthy license → greeting + card). We have not scripted it; DPAPI needs an interactive session, so run the protocol yourself on your target machine.
-- **Connector surface** — every identifier and every verbatim message quoted here was checked against revit-connector@`7366482`. Things that remain uncertain are flagged **[Uncertain]/GUESS** inline in [API.md](API.md); treat them as such.
+- **Build matrix green** for Revit years 2023–2027 via the `NodeAecConnectorDll` override on machines without the connector installed.
+- **Behavior in Revit only via the manual protocol** — signed-out, expired, wrong slug, seat limit, offline grace, connector missing. Each must block; only a healthy license greets. This is not scripted; the underlying storage requires an interactive session, so run it on the target machine.
+- **Connector surface verified** against `revit-connector@7366482`. Open questions are flagged inline in API.md.
 
 ## Links
 
-- [API.md](API.md) — the full integration reference (start at §1, the responsibility split)
-- [AGENTS.md](AGENTS.md) — the brief for coding agents in this repo
-- [.agents/skills/nodeaec-connector-integration/SKILL.md](.agents/skills/nodeaec-connector-integration/SKILL.md) — the installable agent skill
-- [github.com/nodeaec/revit-connector](https://github.com/nodeaec/revit-connector) — the Node.aec Connector itself (read-only upstream)
+- [API.md](API.md) — the full integration reference
+- [AGENTS.md](AGENTS.md) — brief for coding agents in this repo
+- [.agents/skills/nodeaec-connector-integration/SKILL.md](.agents/skills/nodeaec-connector-integration/SKILL.md) — the installable skill
+- [Sample Plugin product page](https://nodeaec.com.br/products/revit-sample-plugin) — the catalog entry for this sample's `revit-sample-plugin` slug (the entitlement your connector session needs for the demo)
+- [Node.aec Connector product page](https://nodeaec.com.br/products/nodeaec-connector) — download and install the connector (start here without it)
+- [github.com/nodeaec/revit-connector](https://github.com/nodeaec/revit-connector) — the **Node.aec Connector source**: the desktop hub this sample plugs into. It owns sign-in, license sync, the `NodeAecGate` license gate, and the shared `Node.aec` ribbon tab. Read-only upstream — install it, build against it, never copy code out of it by hand.
 - [Node.aec platform](https://nodeaec.com.br) — accounts, entitlements, catalog
 
 ## License
