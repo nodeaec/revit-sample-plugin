@@ -77,7 +77,7 @@ public Result Execute(ExternalCommandData commandData, ref string message, Eleme
 {
     GateSnapshot gate;
     try { gate = NodeAecLicenseGate.Validate(); }
-    catch (Exception) { return ShowFailClosed(); }   // belt-and-braces: never proceed
+    catch (Exception) { return ShowFailClosed(); }   // defensive: never proceed unlicensed
 
     try
     {

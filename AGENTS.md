@@ -183,7 +183,7 @@ session:
 - Do not add banner comments, restated code, or changelog narration in source.
 
 **Error handling shape**
-- Command boundary: belt-and-braces `try/catch` around the gate call and around the UI
+- Command boundary: defensive `try/catch` around the gate call and around the UI
   block; every catch returns `ShowFailClosed()` → `Result.Cancelled`.
 - Expected exceptions are filtered: `catch (Exception ex) when (ex is
   Autodesk.Revit.Exceptions.ArgumentException || ex is ArgumentException)` — never a bare
@@ -301,15 +301,14 @@ Upstream: **https://github.com/nodeaec/revit-connector**, local read-only checko
     conflicts in favor of the build-time reference. Follow `API.md` here.
   - **`ribbon-guard`** — upstream ribbon/panel/tab conventions and ghost-tab cleanup.
     Background for §6 rules; note it references helpers that do not exist in connector
-    source (see the notes file discrepancy list) — the sample's `App.cs` code is what to
+    source (see `API.md` §12) — the sample's `App.cs` code is what to
     imitate.
   - **`revit-build-validate`** — upstream build/dependency-pollution rules (never ship
     Revit binaries, clean compilation). Directly applicable when validating this repo's
     matrix.
 - Upstream docs (README, `docs/licensing-api.md`, `docs/USER_MANUAL.md`) contain
   verified code-vs-doc discrepancies; `API.md` §12 records the verification commit
-  (`7366482`) and the flagged uncertainties. The background notes live **outside this
-  repo** at `../revit-sample-plugin-notes/connector-api-facts.md` — background only.
+  (`7366482`) and the flagged uncertainties.
 - Connector version referenced today: `0.1.2`; do not hard-code it in plugin code.
 
 ---

@@ -4,6 +4,15 @@ Reference for plugin authors **and their coding agents**: everything the Node.ae
 (`NodeAec.Connector.dll`) exposes to a partner plugin, how to reference it, how to branch on
 its license gate, and the Ribbon/threading/build rules that go with it.
 
+**Who this is for:** developers comfortable with REST APIs. Think of
+`NodeAecGate.Validate(slug)` as a local `GET /licenses/{slug}`: one string in,
+one JSON-like result out — except it never touches the network. It reads a signed
+lease file from disk, verifies the signature, and answers from memory. There are
+no status codes: the response carries one boolean (`IsLicensed`, your `2xx` vs
+`403`) and one human message (`Message`, the body you show the user). The rest of
+this document is the contract for that call, its failure bodies, and the
+packaging rules around it.
+
 All identifiers below were spot-checked against the connector source. Verbatim connector
 strings (Portuguese) are quoted exactly — never translate or re-word them in code branches.
 
@@ -54,9 +63,10 @@ is Hub-internal even though it is `public`.
 
 ## 2. Quickstart (happy path)
 
-The real command is `SamplePlugin.Commands.HelloCommand`
-(`src/SamplePlugin/Commands/HelloCommand.cs`); the seam it calls is
-`NodeAecLicenseGate.Validate()` returning a plugin-local `GateSnapshot` (§9):
+If you only read one section, make it this one. The whole integration is two calls:
+ask the gate, honor the answer. (`SamplePlugin.Commands.HelloCommand`
+in `src/SamplePlugin/Commands/HelloCommand.cs`, calling the seam
+`NodeAecLicenseGate.Validate()` returning a plugin-local `GateSnapshot` — §9.)
 
 ```csharp
 namespace SamplePlugin.Commands;
@@ -221,6 +231,10 @@ Checklist:
 
 ## 4. Public integration surface
 
+The endpoint reference. `4.1` is the request (one method, one string parameter),
+`4.2` is the response schema (six fields, one boolean that matters), `4.3` is the
+"open the dashboard" courtesy call, `4.4`–`4.5` are extras most plugins never need.
+
 ### 4.1 `NodeAecGate.Validate(string productSlug)`
 
 ```csharp
@@ -338,13 +352,18 @@ There is **no status enum**. Every distinct state is a distinct Portuguese sente
 already written as user guidance) — **never** string-match it to decide behavior, and never
 translate it inside code. Rows marked ⟶ are the cases the brief calls out explicitly.
 
+REST readers: imagine every failure as `403` with a different `message` body and no
+`error_code` field. You would not parse the body to decide the status — same here.
+Read the table to learn what users will see and what guidance to attach, not to
+build branches: your code has exactly one `if` on `IsLicensed`.
+
 **How `HelloCommand` really handles this table — one path for every row.** It does *not*
 branch per row: any non-licensed outcome (including the seam's own
 `ConnectorUnavailableMessage`, shown when the connector assembly cannot be loaded at all)
 renders the **same** fail-closed `TaskDialog` (`BlockedTitle` = `Sample Plugin — License
 Required`) whose `MainInstruction` is `Sample Plugin requires an active Node.aec license.`,
 whose `MainContent` starts `Reason reported by Node.aec:\n{Message}` followed by fixed
-generic guidance bullets (sign in / renew / buy `'sample-plugin'` / connector missing / seat
+generic guidance bullets (sign in / renew / buy `'revit-sample-plugin'` / connector missing / seat
 limit / offline grace), with an `Open Node.aec Connector...` command link (→
 `NodeAecLicenseGate.OpenConnector()` only on click) and `CommonButtons = Close`; the command
 then returns `Result.Cancelled`. The column below is therefore *message-implied* guidance —
@@ -389,6 +408,10 @@ Notes:
 
 ## 6. Ribbon integration conventions
 
+Where your button lives. One shared tab owned by the connector; your plugin rents
+a panel inside it. The rules below keep that tab from duplicating when Revit
+reloads add-ins.
+
 Canonical constants (connector `App.cs`): `App.TabName = "Node.aec"`, `App.PanelName =
 "Conector"`. The sample adds panel **`Sample Plugin`** with button **`Hello World`** inside
 the shared tab.
@@ -411,7 +434,7 @@ assembly to load and JIT in your process the first time your handler runs, i.e. 
 layer hard-depends on the connector being installed — the dependency the sample's `App.cs`
 deliberately avoids. They are also *public but not documented as partner API*
 (**[Uncertain]** support). Recommendation: replicate locally; treat the helpers as a
-belt-and-braces fallback if you already accept the load dependency.
+defensive fallback if you already accept the load dependency.
 
 ### MUST / MUST-NOT rules
 
@@ -426,7 +449,7 @@ belt-and-braces fallback if you already accept the load dependency.
 | **MUST NOT** rely on `RibbonDecisions` / private helpers | `internal`/`private` — invisible outside the connector assembly |
 | **MUST** load icons with `BitmapCacheOption.OnLoad` + `Freeze()` | Otherwise Revit keeps the PNG file locked; mirror `App.LoadButtonIcons` (`UriKind.Absolute`, `CacheOption = OnLoad`, `Freeze()`) |
 | **MUST** keep `OnStartup` non-blocking | No network, no heavy I/O on the Ribbon thread; wrap everything in a top guard returning `Result.Failed` rather than letting exceptions escape half-built |
-| **MUST NOT** produce ghost tabs/panels | Duplicate tabs come from add-in reloads; the hooks above are the sanctioned fix, not manual `Tabs.Remove` calls outside `try/catch` |
+| **MUST NOT** produce ghost tabs/panels | Duplicate tabs come from add-in reloads; the hooks above are the supported fix, not manual `Tabs.Remove` calls outside `try/catch` |
 
 ### Minimal sketch (panel `Sample Plugin`, button `Hello World`) — mirrors `src/SamplePlugin/App.cs`
 
@@ -536,6 +559,10 @@ Optional alternative to `DeduplicateTab()`, **only if you accept the load depend
 
 ## 7. Threading & Revit API-context rules
 
+When and where to call. Short version: call `Validate` once, at the top of each
+command, on Revit's own thread — and keep everything else (network, heavy I/O,
+Revit objects) where it belongs.
+
 - **Call `Validate` from `IExternalCommand.Execute`** (the external-command context). The
   gate touches only filesystem, DPAPI, JSON and crypto — **no Revit API**, no network — so
   it is legal there and needs no `Transaction`.
@@ -561,6 +588,9 @@ Optional alternative to `DeduplicateTab()`, **only if you accept the load depend
 ---
 
 ## 8. Versioning & compatibility matrix
+
+Which framework each Revit year builds against, and how the connector reference
+resolves per year. Find your year in the table, build with that `RevitYear`, done.
 
 ### 8.1 Revit year → target framework
 
@@ -610,10 +640,14 @@ Notes:
 
 ## 9. Fail-closed recipe (`NodeAecLicenseGate.cs`)
 
+The copy-paste seam. One file sits between your commands and the connector so a
+missing connector (or any surprise) becomes a clean denial instead of a crash.
+Port it verbatim, change the slug, keep connector types inside it.
+
 Consistent with the sample's `src/SamplePlugin/Licensing/NodeAecLicenseGate.cs`: **one
 product slug constant** (the one thing to change when adapting this sample) and a seam that
 *cannot* crash the command — `Validate()` returns a plugin-local `GateSnapshot` and never
-throws, including on a machine where the connector isn't installed.
+throws, including on a machine where the connector is not installed.
 
 ```csharp
 using NodeAec.Connector.Gate;
@@ -720,7 +754,7 @@ guarantee applies and returns one of the §5 messages (no lease → message #2);
 `OpenConnector()` then either opens the window or silently no-ops.
 
 Command usage (only plugin-local types — see §2 for the full happy path; the shipping
-`SamplePlugin.Commands.HelloCommand` adds the belt-and-braces `try/catch`, the null guard
+`SamplePlugin.Commands.HelloCommand` adds the defensive `try/catch`, the null guard
 and the `Open Node.aec Connector...` command link that calls `OpenConnector()` on click):
 
 ```csharp
@@ -749,7 +783,7 @@ exists and that you build with the same `-p:RevitYear`. Remember: you must **not
 DLL into your add-in folder as a "fix" — install the connector instead.
 
 **Q: Nothing happens when the user clicks my "open connector" link.**
-By contract `OpenConnector()` is a silent no-op when the connector UI can't be reached
+By contract `OpenConnector()` is a silent no-op when the connector UI cannot be reached
 (assembly absent, window open failure). Your own dialog must already carry the guidance —
 never rely on the window appearing.
 
@@ -759,9 +793,9 @@ This single message covers **not authenticated and connector-not-installed** (§
 Check that the connector is installed for this Revit year, then have the user log in /
 activate a key in the connector and re-run.
 
-**Q: `O produto 'sample-plugin' não consta nas licenças ativas desta conta…`.**
+**Q: `O produto 'revit-sample-plugin' não consta nas licenças ativas desta conta…`.**
 Entitlement missing for the slug — either not purchased/activated, or your `ProductSlug`
-doesn't match the catalog slug (matching is `Trim()` + case-insensitive). Point the user at
+does not match the catalog slug (matching is `Trim()` + case-insensitive). Point the user at
 the catalog: `ProductLinks.BuildProductUrl(slug)`.
 
 **Q: Can I branch on the message text (e.g. `Contains("expirou")`)?**
@@ -776,13 +810,13 @@ panel, `ContainsName`-style button check, `-=` before `+=` on `ApplicationInitia
 handler as in `src/SamplePlugin/App.cs`.
 
 **Q: Is `< 1ms` a guarantee?**
-No — it's a documentation claim. `Validate` does disk I/O (lease read + DPAPI + key read)
+No — it is a documentation claim. `Validate` does disk I/O (lease read + DPAPI + key read)
 on **every** call. Zero network, yes; "pure CPU", no. Call it once per command.
 
 **Q: DPAPI fails (`Access denied`, win32 5) in CI/SSH/headless contexts.**
 Expected: `ProtectedData … CurrentUser` needs a real interactive logon session (Session ≥ 1;
 fail-closed by design otherwise). Validate license persistence manually inside a real Revit
-session; don't weaken storage or skip tests to work around it.
+session; do not weaken storage or skip tests to work around it.
 
 **Q: May I ship `NodeAecGate` source in my plugin instead of referencing the DLL?**
 Not in this repository — §3.2 rejects the source-copy path (incomplete dependency closure,

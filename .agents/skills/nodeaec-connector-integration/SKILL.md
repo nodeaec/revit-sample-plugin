@@ -39,10 +39,9 @@ another plugin. Skip it only for plugins that ship no licensed functionality.
 
 1. **Inventory every command that must be gated.** List all `IExternalCommand`
    classes (and any other entry point that runs licensed work).
-   *Decision point:* gate every user-facing command; the only defensible
-   exception is plumbing whose sole job is license recovery (e.g. a button that
-   only opens the connector). Ungated commands are a release blocker, not a
-   TODO.
+   *Decision point:* gate every user-facing command; the only
+   exception is an entry point whose sole job is license recovery (for example, a button that
+   only opens the connector). Ungated commands are a release blocker, not a TODO.
 
 2. **Add the build reference per the packaging contract** (API.md §3 *The
    integration path (authoritative)*). Exactly one `<Reference
@@ -114,14 +113,14 @@ another plugin. Skip it only for plugins that ship no licensed functionality.
 | Creating your own ribbon tab | Two tabs fragment the ecosystem; the shared tab is canonical | Panel `Sample Plugin` inside the shared `Node.aec` tab |
 | Gating only some commands | Ungated path = free feature; fails review | Step 1 inventory; gate every command at entry |
 | Swallowing exceptions into "licensed" | Turns any error into a free pass — fail-open | Catch → not-licensed snapshot → `Result.Cancelled` |
-| Inventing `GateResult` fields (seats, plan, licensee, slug, status) | They do not exist; code won't compile | Only the six real members; `IsLicensed` branches |
+| Inventing `GateResult` fields (seats, plan, licensee, slug, status) | They do not exist; the code will not compile | Only the six real members; `IsLicensed` branches |
 | Calling Node.aec HTTP APIs directly | Hub-internal, breaks the responsibility split | Only `NodeAecLicenseGate.Validate()` / `OpenConnector()` |
 
 ## 5. Adapt-to-your-plugin mapping
 
 | Sample (this repo) | Your plugin |
 |---|---|
-| `ProductSlug = "sample-plugin"` | Your registered catalog slug — the **one** constant to change |
+| `ProductSlug = "revit-sample-plugin"` | Your registered catalog slug — the **one** constant to change |
 | Namespace `SamplePlugin.*` / assembly `SamplePlugin` | Your root namespace / assembly name |
 | Panel `Sample Plugin` | Your panel name inside the shared `Node.aec` tab |
 | Button `Hello World`, id `SamplePlugin_HelloWorld` | Your button text and unique id |
