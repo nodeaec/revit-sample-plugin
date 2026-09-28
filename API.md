@@ -32,10 +32,15 @@ loopback), syncs the signed **master entitlements lease** to
 Ed25519, and hosts the canonical **`Node.aec`** Ribbon tab. A **partner plugin** (this
 sample) never talks to the network and never stores credentials — it only *asks the gate*.
 
+In REST terms: the connector is the server (auth, storage, verification, UI) and your
+plugin is a client that may only call one local endpoint — the gate. There is no
+API key to manage, no token to refresh, no HTTP client to build. You pass a slug,
+you get a result, you honor it.
+
 | The connector owns… | The plugin must do… |
 |---|---|
 | SSO login, license-key activation, lease sync/heartbeat (6 h background timer) | Reference `NodeAec.Connector.dll` at build time (§3) — never copy it |
-| DPAPI storage of the lease + Ed25519 signature verification | Declare **one** product slug constant (`sample-plugin`) — the one thing to change when adapting this sample |
+| DPAPI storage of the lease + Ed25519 signature verification | Declare **one** product slug constant ([`revit-sample-plugin`](https://nodeaec.com.br/products/revit-sample-plugin)) — the one thing to change when adapting this sample |
 | The gate: `NodeAecGate.Validate(slug)` / `OpenConnector()` | Call the plugin-local seam `NodeAecLicenseGate.Validate()` at command entry and branch **only** on `IsLicensed` (§2, §9) |
 | Canonical Ribbon tab `Node.aec`, its `Conector` panel, tab deduplication | Add its own **panel** (`Sample Plugin`) and button (`Hello World`) inside that shared tab — never a plugin-owned tab (§6) |
 | The connector UI (account, plugins, catalog windows) | Show the returned `Message` verbatim on failure and offer to open the connector |
@@ -74,18 +79,24 @@ public class HelloCommand : IExternalCommand          // real class: SamplePlugi
     }
 }
 ```
+Source: [HelloCommand.cs:L36-L63](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/Commands/HelloCommand.cs#L36-L63) (simplified; the shipped command adds the dialog detail shown in §5).
 
-(The shipping `HelloCommand` adds a belt-and-braces `try/catch`, a null-state guard and the
+(The shipping `HelloCommand` adds a defensive `try/catch`, a null-state guard and the
 `Open Node.aec Connector...` command link — see §5 for the exact dialog shape.)
 
 Setup behind those two calls (details in §3): a build-time `<Reference>` with `HintPath` to
 `$(ProgramData)\Autodesk\Revit\Addins\<year>\NodeAec.Connector\NodeAec.Connector.dll` and
 `<Private>False</Private>`, plus the constant
-`public const string ProductSlug = "sample-plugin";`.
+`public const string ProductSlug = "revit-sample-plugin";`.
 
 ---
 
 ## 3. The integration path (authoritative)
+
+How the dependency works, in one paragraph: your project references the connector
+DLL where the installer put it (per Revit year), you never copy or ship that DLL,
+and your installer drops your own manifest + DLL beside it. The subsections below
+are the exact MSBuild, the one rejected alternative, and the folder layout.
 
 ### 3.1 The contract (bind exactly)
 
@@ -98,6 +109,7 @@ Setup behind those two calls (details in §3): a build-time `<Reference>` with `
   </Reference>
 </ItemGroup>
 ```
+Source: [SamplePlugin.csproj:L105-L107](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/SamplePlugin.csproj#L105-L107).
 
 - **NOT NuGet** — the connector repository contains no `.nuspec`/`.nupkg`; no package exists.
 - **NOT a `ProjectReference`** — the connector is a separate repo/product with its own
@@ -118,6 +130,7 @@ Setup behind those two calls (details in §3): a build-time `<Reference>` with `
     <Private>False</Private>
   </Reference>
   ```
+  Source: [SamplePlugin.csproj:L70](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/SamplePlugin.csproj#L70) (property) and [L105-L107](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/SamplePlugin.csproj#L105-L107) (reference).
 
   Override it **only** to validate compilation on a machine where the connector is not
   installed: `dotnet build src/SamplePlugin/SamplePlugin.csproj -p:RevitYear=2026
@@ -224,20 +237,22 @@ public static class NodeAecGate
 
 | Aspect | Contract |
 |---|---|
-| **Parameter** | `productSlug` — your product's catalog slug. Matched against the entitlement claim `slug` with `Trim()` + `OrdinalIgnoreCase`. `null`/whitespace ⇒ immediate failure (`Slug do produto não informado…`). This sample uses `"sample-plugin"`. |
+| **Parameter** | `productSlug` — your product's catalog slug. Matched against the entitlement claim `slug` with `Trim()` + `OrdinalIgnoreCase`. `null`/whitespace ⇒ immediate failure (`Slug do produto não informado…`). This sample uses [`"revit-sample-plugin"`](https://nodeaec.com.br/products/revit-sample-plugin). |
 | **Returns** | `NodeAecGate.GateResult` (nested class) — **no enum, no status code, no out-params**. The only boolean is `IsLicensed`; the only human string is `Message`. |
 | **Never throws** | Guaranteed: everything after the initial lease read is wrapped in a top-level `catch (Exception)` that logs `ERROR … Erro inesperado na validação do gate: {ExceptionType}.` and returns `GateResult.Failure("Não foi possível verificar a licença local. Abra o Node.aec Connector para ressincronizar.")`. The pre-try part's only I/O call, `LeaseStorage.LoadMasterLease()`, swallows its own exceptions and returns `null`. (Bounded, as always, by catastrophic CLR failures — and by the assembly-load nuance of §3.1, which keeps `NodeAecGate.Validate` from ever running when the DLL is missing; the plugin-side seam turns that into a fail-closed `GateSnapshot`.) |
-| **Network** | **Zero network calls.** Every call does local disk I/O (`entitlements.lease` read + DPAPI unprotect + verification-keys read), base64/JWT parse, Ed25519 verify and an in-memory entitlement scan. The `< 1ms` figure in connector docs is a documentation claim, not a measured guarantee — treat it as "cheap", and call it **once per command**, not in per-element loops. |
+| **Network** | **Zero network calls.** Every call does local disk I/O (`entitlements.lease` read + DPAPI unprotect + verification-keys read), base64/JWT parse, Ed25519 verify and an in-memory entitlement scan. The `< 1ms` figure in connector docs is a documentation claim, not a measured guarantee — treat each call as inexpensive disk I/O, and call it **once per command**, not in per-element loops. |
 | **Revit API** | None — no `Document`, no `UIApplication`. Filesystem/DPAPI/crypto only. |
 | **Verification order** | Ed25519 signature → `iss` (`"node-aec"`) → `scope` (`"master-lease"`) → `aud` (`node-aec-desktop`/`node-aec-plugin`) → `iat` (≤ now+300 s) → machine id (`mid`) → offline `exp` → entitlement `slug` → entitlement activity. |
 
 ### 4.2 `NodeAecGate.GateResult` — every member
 
-Immutable; constructed only by the public factories, no setter mutates it afterwards.
+The response body. Think of it as a JSON object with six keys: one boolean status,
+four payload fields that are only populated on success, and one human message that
+is always populated. Immutable; constructed only by the public factories, no setter mutates it afterwards.
 
 | Member | C# type | Semantics | When set |
 |---|---|---|---|
-| `IsLicensed` | `bool` | **The only branch point.** `true` iff the slug has an active, verified entitlement on this machine. | `true` only via `Success(...)`; every `Failure` sets `false` |
+| `IsLicensed` | `bool` | **The only branch point.** `true` if and only if the slug has an active, verified entitlement on this machine. | `true` only via `Success(...)`; every `Failure` sets `false` |
 | `LicenseType` | `string?` | Entitlement `type` claim — a **free string**, not an enum (`"perpetual"` is the model default; vocabulary is not documented). | `Success` only; `null` on failure |
 | `LicenseKey` | `string?` | Entitlement `licenseKey` claim, e.g. `NAEC-XXXX-XXXX-XXXX-XXXX`. | `Success` only; `null` on failure |
 | `ProductName` | `string?` | Display name of the entitlement (`name` claim). | `Success` only; `null` on failure |
@@ -511,6 +526,7 @@ public class App : IExternalApplication
     }
 }
 ```
+Source: [App.cs](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/App.cs) — constants [L29-L38](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/App.cs#L29-L38), startup [L47](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/App.cs#L47), tab [L100](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/App.cs#L100), panel [L118-L130](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/App.cs#L118-L130), hooks [L175-L179](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/App.cs#L175-L179), dedup [L200](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/App.cs#L200).
 
 Optional alternative to `DeduplicateTab()`, **only if you accept the load dependency**:
 `NodeAec.Connector.App.DeduplicateRibbonTabs(TabName); NodeAec.Connector.App.CleanRogueRibbonElements();`
@@ -688,6 +704,7 @@ public sealed class GateSnapshot
     public bool ConnectorAvailable { get; }     // false ⇒ assembly missing (fail-closed state)
 }
 ```
+Source: [NodeAecLicenseGate.cs:L24-L106](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/Licensing/NodeAecLicenseGate.cs#L24-L106) (seam) and [L143-L195](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/Licensing/NodeAecLicenseGate.cs#L143-L195) (`GateSnapshot`).
 
 Why the isolation boundary: the CLR JIT resolves `NodeAecGate` while compiling a method
 that mentions it — if the DLL is missing, that resolution fails when the method first
@@ -716,10 +733,14 @@ if (!gate.IsLicensed)
     return Result.Cancelled;
 }
 ```
+Source: [HelloCommand.cs:L40-L63](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/Commands/HelloCommand.cs#L40-L63) (full dialog at [L110-L134](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/Commands/HelloCommand.cs#L110-L134)).
 
 ---
 
 ## 10. Troubleshooting / FAQ
+
+Symptoms first, fixes second. If your command blocks unexpectedly, find the shape
+of your failure below before re-reading the earlier sections.
 
 **Q: My plugin fails to load right after adding the reference.**
 HintPath year mismatch or connector not installed for that year. Verify

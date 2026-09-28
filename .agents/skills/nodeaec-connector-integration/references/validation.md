@@ -13,6 +13,7 @@ dotnet build src/SamplePlugin/SamplePlugin.csproj -p:RevitYear=2025   # net8.0-w
 dotnet build src/SamplePlugin/SamplePlugin.csproj -p:RevitYear=2026   # net8.0-windows (default)
 dotnet build src/SamplePlugin/SamplePlugin.csproj -p:RevitYear=2027   # net10.0-windows
 ```
+Source: canonical forms documented in [SamplePlugin.csproj:L16-L18](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/SamplePlugin.csproj#L16-L18).
 
 Machine without the connector installed (CI compile-only):
 
@@ -28,6 +29,7 @@ Payload hygiene — the `release/`/`stage/` output must contain **neither**
 %ProgramData%\Autodesk\Revit\Addins\<year>\SamplePlugin.addin          (root)
 %ProgramData%\Autodesk\Revit\Addins\<year>\SamplePlugin\SamplePlugin.dll
 ```
+Source: [SamplePlugin.addin](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/SamplePlugin.addin).
 
 ## 2. Manual Revit test script
 

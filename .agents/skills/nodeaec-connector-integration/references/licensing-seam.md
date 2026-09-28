@@ -43,6 +43,7 @@ Deep detail for step 3 of SKILL.md. Canonical source:
            connectorAvailable: true);
    }
    ```
+   Source: [NodeAecLicenseGate.cs:L46-L86](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/Licensing/NodeAecLicenseGate.cs#L46-L86).
 
    The load failure lands at `RunValidation()`'s call site, inside
    `Validate()`'s `catch`, and surfaces as a normal fail-closed snapshot.
@@ -96,10 +97,11 @@ public Result Execute(ExternalCommandData commandData, ref string message, Eleme
     catch (Exception) { return ShowFailClosed(); }
 }
 ```
+Source: [HelloCommand.cs:L36-L80](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/Commands/HelloCommand.cs#L36-L80) (blocked dialog at [L110-L134](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/Commands/HelloCommand.cs#L110-L134)).
 
 `ShowBlockedDialog` builds a `TaskDialog` whose `MainContent` starts with
 `Reason reported by Node.aec:\n{gate.Message}`, adds fixed guidance bullets
-(sign in / renew / buy `'sample-plugin'` / connector missing / seat limit /
+(sign in / renew / buy `'revit-sample-plugin'` / connector missing / seat limit /
 offline grace), adds `AddCommandLink(... "Open Node.aec Connector...")` calling
 `NodeAecLicenseGate.OpenConnector()` only on click, and the command then
 returns `Result.Cancelled`. There is no code path past the gate without a

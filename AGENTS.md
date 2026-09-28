@@ -37,17 +37,16 @@ security boundary.
 
 | Path | Role |
 |---|---|
-| `src/SamplePlugin/SamplePlugin.csproj` | SDK-style project: Revit-year matrix, the single `NodeAec.Connector` reference, `NodeAecConnectorDll` override, per-year `bin\`/`obj\` isolation. Header comment documents the build commands — keep it in sync with reality. |
-| `src/SamplePlugin/App.cs` | `IExternalApplication`. Builds the shared ribbon: `Node.aec` tab (defensive create), panel `Sample Plugin`, button `Hello World`, local tab-dedup replica + AdWindows hooks. **Contains zero Node.aec Connector API calls** — by design. |
-| `src/SamplePlugin/Commands/HelloCommand.cs` | `SamplePlugin.Commands.HelloCommand`. The canonical command shape: gate first, fail-closed dialog + `Result.Cancelled`, licensed greeting with `NodeAecLicenseGate.BuildLicenseBlock(gate)`. |
-| `src/SamplePlugin/Licensing/NodeAecLicenseGate.cs` | **The integration seam.** `NodeAecLicenseGate.Validate()` → `GateSnapshot`, `NodeAecLicenseGate.OpenConnector()`, `NodeAecLicenseGate.BuildLicenseBlock(GateSnapshot)`, the `ProductSlug` constant, and the `GateSnapshot` type. The ONLY file in this repo allowed to reference `NodeAec.Connector` types. |
-| `src/SamplePlugin/SamplePlugin.addin` | Revit manifest. Deployed to `%ProgramData%\Autodesk\Revit\Addins\<year>\SamplePlugin.addin` with `<Assembly>SamplePlugin\SamplePlugin.dll`. |
+| `src/SamplePlugin/SamplePlugin.csproj` | SDK-style project: Revit-year matrix, the single `NodeAec.Connector` reference, `NodeAecConnectorDll` override, per-year `bin\`/`obj\` isolation. Header comment documents the build commands — keep it in sync with reality. ([source](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/SamplePlugin.csproj)) |
+| `src/SamplePlugin/App.cs` | `IExternalApplication`. Builds the shared ribbon: `Node.aec` tab (defensive create), panel `Sample Plugin`, button `Hello World`, local tab-dedup replica + AdWindows hooks. **Contains zero Node.aec Connector API calls** — by design. ([source](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/App.cs)) |
+| `src/SamplePlugin/Commands/HelloCommand.cs` | `SamplePlugin.Commands.HelloCommand`. The canonical command shape: gate first, fail-closed dialog + `Result.Cancelled`, licensed greeting with `NodeAecLicenseGate.BuildLicenseBlock(gate)`. ([source](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/Commands/HelloCommand.cs)) |
+| `src/SamplePlugin/Licensing/NodeAecLicenseGate.cs` | **The integration seam.** `NodeAecLicenseGate.Validate()` → `GateSnapshot`, `NodeAecLicenseGate.OpenConnector()`, `NodeAecLicenseGate.BuildLicenseBlock(GateSnapshot)`, the `ProductSlug` constant, and the `GateSnapshot` type. The ONLY file in this repo allowed to reference `NodeAec.Connector` types. ([source](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/Licensing/NodeAecLicenseGate.cs)) |
+| `src/SamplePlugin/SamplePlugin.addin` | Revit manifest. Deployed to `%ProgramData%\Autodesk\Revit\Addins\<year>\SamplePlugin.addin` with `<Assembly>SamplePlugin\SamplePlugin.dll`. ([source](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/SamplePlugin.addin)) |
 | `src/SamplePlugin/bin/`, `src/SamplePlugin/obj/` | Per-year build output (`bin\<year>\…`). Git-ignored; never edit, never commit. |
 | `API.md` | The integration contract: connector surface, message taxonomy, ribbon/threading/build rules. Verified against revit-connector@7366482. Section titles are stable — cross-reference them by title. |
-| `README.md` | Human-facing overview (created by a parallel agent; reference it, do not assume you own it). |
+| `README.md` | Human-facing overview and onboarding guide. |
 | `LICENSE` | MIT. |
 | `.agents/skills/nodeaec-connector-integration/SKILL.md` | This project's skill: the actionable adaptation workflow (see §11). Progressive disclosure: `SKILL.md` stays concise, depth lives in `references/licensing-seam.md` (seam walkthrough) and `references/validation.md` (build + manual test script). |
-| `../revit-sample-plugin-notes/connector-api-facts.md` | **Outside the repo.** Background research notes (code-grounded connector facts, doc-vs-code discrepancy list). Useful context; never a source of truth over `API.md` or code. |
 | `../revit-connector/` | **Outside the repo, READ-ONLY upstream** (see §10). |
 
 ---
@@ -74,7 +73,7 @@ Use these exact values and names everywhere — docs, code, dialogs, commits. Ne
 
 | Concept | Canonical value |
 |---|---|
-| Product slug (the ONE constant a plugin changes when adapting) | `sample-plugin` |
+| Product slug (the ONE constant a plugin changes when adapting) | [`revit-sample-plugin`](https://nodeaec.com.br/products/revit-sample-plugin) |
 | Plugin display name | `Sample Plugin` |
 | Ribbon tab (shared, owned by the connector) | `Node.aec` |
 | Ribbon panel (this plugin's) | `Sample Plugin` |
@@ -103,6 +102,7 @@ dotnet build src/SamplePlugin/SamplePlugin.csproj -p:RevitYear=2026   # default
 dotnet build src/SamplePlugin/SamplePlugin.csproj -p:RevitYear=2023   # net48
 dotnet build src/SamplePlugin/SamplePlugin.csproj -p:RevitYear=2027   # net10
 ```
+Source: canonical forms documented in [SamplePlugin.csproj:L16-L18](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/SamplePlugin.csproj#L16-L18).
 
 Year → TFM: `2023|2024` → `net48`, `2025|2026` → `net8.0-windows`, `2027` →
 `net10.0-windows`. 2026 deliberately stays on `net8.0-windows` (rationale in the csproj

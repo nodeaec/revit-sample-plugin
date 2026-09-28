@@ -30,7 +30,7 @@ another plugin. Skip it only for plugins that ship no licensed functionality.
   (or a license key activated) on the test machine — the gate reads the local
   lease the connector syncs; it never logs in for you.
 - **Product slug registered and entitled** on the platform (this sample: the
-  constant `ProductSlug = "sample-plugin"` — the single constant you change).
+  constant `ProductSlug = "revit-sample-plugin"` — [product page](https://nodeaec.com.br/products/revit-sample-plugin) — the single constant you change).
 - **Supported Revit years**: 2023–2027 via `-p:RevitYear=<year>` (default 2026)
   → `net48` / `net8.0-windows` / `net10.0-windows`. Connector DLL expected at
   `%ProgramData%\Autodesk\Revit\Addins\<year>\NodeAec.Connector\NodeAec.Connector.dll`.
@@ -141,3 +141,8 @@ another plugin. Skip it only for plugins that ship no licensed functionality.
   `src/SamplePlugin/Licensing/NodeAecLicenseGate.cs`,
   `src/SamplePlugin/Commands/HelloCommand.cs`, `src/SamplePlugin/App.cs`,
   `src/SamplePlugin/SamplePlugin.csproj`, `src/SamplePlugin/SamplePlugin.addin`.
+- Upstream connector (read-only, background only):
+  <https://github.com/nodeaec/revit-connector> — owns `NodeAecGate`,
+  the shared tab, and its own skills (`licensing-integrate`, `ribbon-guard`,
+  `revit-build-validate`). Never edit it from this integration; this repo's
+  `API.md` governs here.
