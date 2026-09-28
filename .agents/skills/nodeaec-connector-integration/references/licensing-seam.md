@@ -62,7 +62,7 @@ Deep detail for step 3 of SKILL.md. Canonical source:
 
 | Member | Role |
 |---|---|
-| `public const string ProductSlug = "sample-plugin";` | The one constant to change when adapting |
+| `public const string ProductSlug = "revit-sample-plugin";` | The one constant to change when adapting |
 | `public const string ConnectorUnavailableMessage` | English fail-closed text used when the assembly cannot be loaded at all (`ConnectorAvailable == false`) — distinct from the connector's own Portuguese messages |
 | `public static GateSnapshot Validate()` | Entry point; never throws; returns a snapshot (never `null`) |
 | `private static GateSnapshot RunValidation()` | Single place `NodeAecGate.Validate(ProductSlug)` is read |

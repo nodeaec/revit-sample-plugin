@@ -27,7 +27,7 @@ public static class NodeAecLicenseGate
     /// THE one constant to change when adapting this sample to another product:
     /// the product slug as registered in the Node.aec catalog / entitlement claims.
     /// </summary>
-    public const string ProductSlug = "sample-plugin";
+    public const string ProductSlug = "revit-sample-plugin";
 
     /// <summary>
     /// Reason shown when the connector assembly cannot be reached at all (not

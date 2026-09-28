@@ -349,7 +349,7 @@ detail your own UI may surface — not a set of code branches.
 | 10 | ⟶ `A concessão de licenças foi emitida para outra estação de trabalho (Hardware ID divergente).` | **Machine mismatch** — lease bound to another PC | Cancel; user must activate/log in on this machine |
 | 11 | ⟶ `O prazo de tolerância offline expirou em {dd/MM/yyyy}. Conecte-se à internet para sincronizar.` | **Offline grace** (tolerância offline, default 30 days) expired — `exp` in the past | Cancel; tell user to connect and sync (connector "Atualizar") |
 | 12 | `O prazo da licença local não pôde ser lido. Conecte-se à internet e clique em atualizar no Node.aec Connector.` | `exp` unreadable/out of plausible range | Cancel; go online → update |
-| 13 | ⟶ `O produto '{productSlug}' não consta nas licenças ativas desta conta. Adquira ou ative no catálogo Node.aec.` | **Missing entitlement** — account has no lease entry for this slug (wrong product, not purchased, or slug mismatch) | Blocked dialog + `Result.Cancelled`; the sample's guidance bullet calls out `'sample-plugin'` — optionally add a catalog link via `ProductLinks.BuildProductUrl(slug)` |
+| 13 | ⟶ `O produto '{productSlug}' não consta nas licenças ativas desta conta. Adquira ou ative no catálogo Node.aec.` | **Missing entitlement** — account has no lease entry for this slug (wrong product, not purchased, or slug mismatch) | Blocked dialog + `Result.Cancelled`; the sample's guidance bullet calls out `'revit-sample-plugin'` — optionally add a catalog link via `ProductLinks.BuildProductUrl(slug)` |
 | 14 | ⟶ `O limite de computadores simultâneos para '{Name}' foi atingido.` | **Seat limit** — entitlement `status == "seat_limit_reached"` | Cancel; user frees a seat in the web portal, then revalidates |
 | 15 | ⟶ `A licença ou período de teste de '{Name}' expirou em {dd/MM/yyyy}.` | **Expired license or trial** — `expiresAt` in the past. Note: there is **no trial claim** anywhere; "período de teste" is wording only — a trial is just an entitlement that expires | Cancel; user renews in the portal |
 | 16 | `A licença de '{Name}' está com status '{Status}'.` | Any other inactive status, or `granted:false`. **Quirk (verified):** if `granted` is `false` while `status` stays `"active"` and unexpired, the text reads `… está com status 'active'.` — confusing but verbatim | Show as-is in the blocked dialog (the status string is echoed verbatim); surface it to support if needed |
@@ -608,7 +608,7 @@ namespace SamplePlugin.Licensing;
 public static class NodeAecLicenseGate
 {
     /// <summary>THE one constant to change when adapting this sample.</summary>
-    public const string ProductSlug = "sample-plugin";
+    public const string ProductSlug = "revit-sample-plugin";
 
     /// <summary>Reason when the connector assembly cannot be reached at all (§3.1).</summary>
     public const string ConnectorUnavailableMessage =
@@ -783,7 +783,7 @@ maintenance burden, divergent versions). Exactly one integration path is authori
 | **`GateSnapshot`** | Plugin-local, connector-free mirror of one gate outcome, returned by `NodeAecLicenseGate.Validate()`; 6 `GateResult` members + `ConnectorAvailable` (`false` = connector assembly missing) |
 | **Master lease** | Signed JWT (`scope: master-lease`) stored DPAPI-encrypted at `%APPDATA%\NodeAec\entitlements.lease`; claims `iss/sub/mid/scope/aud/iat/exp/entitlements` |
 | **Entitlement** | One product grant inside the lease (`slug`, `name`, `licenseKey`, `type`, `status`, `granted`, `expiresAt`, seat counts) |
-| **Slug** | Product identifier matched by `Validate` (here: `sample-plugin`) |
+| **Slug** | Product identifier matched by `Validate` (here: `revit-sample-plugin`) |
 | **Offline grace (tolerância offline)** | Lease `exp` window (default 30 days) during which validation works without network; expired ⇒ taxonomy #11 |
 | **Seat (posto)** | One activated computer; `seat_limit_reached` ⇒ taxonomy #14; counts never surface in `GateResult` |
 | **Machine mismatch** | `mid` claim ≠ this machine's SHA-256 `MachineGuid` ⇒ taxonomy #10 |

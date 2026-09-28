@@ -39,9 +39,9 @@ interactive logon — CI/headless cannot cover this). Record: dialog shown,
 |---|---|---|---|
 | 1 | **No connector** | Uninstall the Node.aec Connector for that year (or rename its `Addins\<year>\NodeAec.Connector\` folder), restart Revit | Command still loads; gate fails at the seam; blocked dialog with `ConnectorUnavailableMessage`; `Open Node.aec Connector...` click is a silent no-op; `Result.Cancelled`; no crash |
 | 2 | **Not signed in** | Connector installed; clear the session / sign out (lease absent) | Blocked dialog showing connector `Message` verbatim (`Nenhuma credencial do Node.aec encontrada nesta estação…`); command link opens the connector UI; `Result.Cancelled` |
-| 3 | **No entitlement** | Signed in with an account that lacks slug `sample-plugin` (or a typo'd `ProductSlug`) | Blocked dialog with `O produto 'sample-plugin' não consta nas licenças ativas desta conta…` verbatim; `Result.Cancelled` |
+| 3 | **No entitlement** | Signed in with an account that lacks slug `revit-sample-plugin` (or a typo'd `ProductSlug`) | Blocked dialog with `O produto 'revit-sample-plugin' não consta nas licenças ativas desta conta…` verbatim; `Result.Cancelled` |
 | 4 | **Expired** | Entitlement past `ExpiresAt` (test account, or wait out offline grace) | Blocked dialog with `A licença ou período de teste de '…' expirou em {dd/MM/yyyy}.` verbatim; `Result.Cancelled` |
-| 5 | **Valid** | Connector installed, signed in, entitled for `sample-plugin` | Licensed greeting; license block shows Product / Type / License key / Valid until / Status from the real fields; `Result.Succeeded` |
+| 5 | **Valid** | Connector installed, signed in, entitled for `revit-sample-plugin` | Licensed greeting; license block shows Product / Type / License key / Valid until / Status from the real fields; `Result.Succeeded` |
 
 Cross-checks after the run:
 
