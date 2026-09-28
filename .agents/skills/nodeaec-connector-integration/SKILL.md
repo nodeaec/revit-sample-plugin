@@ -102,6 +102,8 @@ another plugin. Skip it only for plugins that ship no licensed functionality.
    - [ ] Not signed in / no entitlement / expired → blocked dialog, connector `Message` verbatim, `Result.Cancelled`
    - [ ] Add-in reloaded twice → still one `Node.aec` tab, one `Hello World` button
    - [ ] `release`/`stage` contain neither `RevitAPI*.dll` nor `NodeAec.Connector.dll`
+   - [ ] Docs still accurate: every `Source:` file/line link points at the intended
+     lines (re-anchor any link whose target moved)
 
    Setups and expected texts per case: [`references/validation.md`](references/validation.md).
 

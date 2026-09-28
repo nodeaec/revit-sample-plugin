@@ -279,6 +279,7 @@ A change to column X **must** update column Y in the same commit (rule G7):
 | Connector-verified identifiers or verbatim messages | `API.md` (and bump its revit-connector commit note in §12 *Verification & related documents*) — never edit upstream |
 | Manual test protocol steps | `API.md` §10 *Troubleshooting / FAQ* + skill checklist + `README.md` validate step |
 | Related-document list / file renames | `API.md` §12 *Verification & related documents* (it links `README.md`, `AGENTS.md`, the skill) |
+| Source lines move (any edit that shifts line numbers in `src/…`) | every `Source:` file/line link in `README.md`, `API.md`, skill + references that points at the moved lines — re-anchor each one the same way they were created (verify the target line still holds the quoted code) |
 
 Never let a doc describe behavior the code does not have; when docs and code disagree,
 **code wins and the docs are fixed in the same change**.
@@ -356,5 +357,7 @@ Upstream: **https://github.com/nodeaec/revit-connector**, local read-only checko
 - ❌ Do not "fix" `MSB3245`/`CS0246` by copying the DLL or stubbing the gate (§5).
 - ❌ Do not rename canonical vocabulary (§4), reuse another add-in's `AddInId`, or rename
   `API.md`/`README.md`/`AGENTS.md`/the skill path in cross-references.
+- ❌ Do not leave stale `Source:` file/line links — after any `src/` edit, re-verify every
+  anchor still points at the intended lines (§9).
 - ❌ Do not fabricate tests or claim runtime validation that requires Revit/DPAPI — say
   what was actually built and what still needs the manual run (§5).
