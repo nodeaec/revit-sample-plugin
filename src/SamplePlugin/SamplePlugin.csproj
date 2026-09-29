@@ -78,7 +78,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>SamplePlugin</RootNamespace>
     <AssemblyName>SamplePlugin</AssemblyName>
-    <Version>1.0.0</Version>
+    <Version>0.1</Version>
     <Description>Sample Plugin — reference integration of Node.aec licensing (NodeAecGate) for Autodesk Revit.</Description>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <!-- Autodesk.Windows (AdWindows) surfaces WPF types; same flag the connector uses. -->

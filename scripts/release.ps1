@@ -13,11 +13,11 @@
   entry in Windows Settings > Apps ("Sample Plugin"), upgraded in place.
 
 .EXAMPLE
-  powershell -ExecutionPolicy Bypass -File scripts/release.ps1 -Version 1.0.0 -RevitYear 2026
-  powershell -ExecutionPolicy Bypass -File scripts/release.ps1 -Version 1.0.0 -RevitYear 2023 -Install
+  powershell -ExecutionPolicy Bypass -File scripts/release.ps1 -Version 0.1 -RevitYear 2026
+  powershell -ExecutionPolicy Bypass -File scripts/release.ps1 -Version 0.1 -RevitYear 2023 -Install
 #>
 param(
-  [string]$Version = "1.0.0",
+  [string]$Version = "0.1",
   [string]$RevitYear = "2026",
   [string]$Configuration = "Release",
   # Inno Setup AppId shared by every year (user-supplied identity).
@@ -35,7 +35,7 @@ if ($args.Count -gt 0) {
   throw "Unrecognized arguments: $($args -join ' '). Use -RevitYear <year> (e.g. -RevitYear 2023)."
 }
 if ($Version -notmatch '^\d+\.\d+(\.\d+){0,2}([.-][0-9A-Za-z]+)*$') {
-  throw "Invalid version: '$Version'. Use SemVer (e.g. 1.0.0) and pass the year with -RevitYear <year>."
+  throw "Invalid version: '$Version'. Use SemVer (e.g. 0.1) and pass the year with -RevitYear <year>."
 }
 if ($RevitYear -notin @("2023","2024","2025","2026","2027")) {
   throw "Unsupported RevitYear '$RevitYear': use 2023, 2024, 2025, 2026 or 2027."

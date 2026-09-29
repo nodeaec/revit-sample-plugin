@@ -1,7 +1,7 @@
 ; Sample Plugin - Inno Setup installer script (requires Inno Setup 6).
 ;
 ; ONE Setup.exe == ONE Revit year. Compiled automatically by scripts/release.ps1:
-;   ISCC.exe /DAppVersion=1.0.0 /DAppVersionNum=1.0.0 /DRevitYear=2026
+;   ISCC.exe /DAppVersion=0.1 /DAppVersionNum=0.1.0 /DRevitYear=2026
 ;            /DAppId={a61b450f-4226-4edc-ad8d-42613b1555a5}
 ;            /DPayloadStage=<abs path>\release\stage\SamplePlugin
 ;            /O<abs path>\release scripts\installer.iss
@@ -26,10 +26,10 @@
 ; NOTE: this file must stay plain ASCII (ISCC reads scripts as ANSI/UTF-8-BOM).
 
 #ifndef AppVersion
-  #define AppVersion "1.0.0"
+  #define AppVersion "0.1"
 #endif
 #ifndef AppVersionNum
-  #define AppVersionNum "1.0.0"
+  #define AppVersionNum "0.1.0"
 #endif
 #ifndef RevitYear
   #define RevitYear "2026"
