@@ -125,6 +125,15 @@ if ($iscc) {
   "$setupHash  $setupName" | Out-File "$setupPath.sha256" -Encoding ascii
   Write-Host "==> setup: $setupPath"
   Write-Host "    sha256: $setupHash"
+
+  # Bundle the installer with its checksum: one zip per Setup.exe.
+  $setupZip = Join-Path $ReleaseDir ($setupName -replace '\.exe$','.zip')
+  if (Test-Path $setupZip) { Remove-Item $setupZip -Force }
+  Compress-Archive -Path $setupPath, "$setupPath.sha256" -DestinationPath $setupZip -Force
+  $setupZipHash = (Get-FileHash $setupZip -Algorithm SHA256).Hash.ToLowerInvariant()
+  "$setupZipHash  $(Split-Path $setupZip -Leaf)" | Out-File "$setupZip.sha256" -Encoding ascii
+  Write-Host "==> setup zip: $setupZip"
+  Write-Host "    sha256: $setupZipHash"
 }
 else {
   Write-Warning "Inno Setup 6 (ISCC.exe) not found - only the .zip was generated. Install from https://jrsoftware.org/isdl.php to also build $setupName."
