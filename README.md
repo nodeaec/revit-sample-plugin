@@ -65,7 +65,7 @@ dotnet build src/SamplePlugin/SamplePlugin.csproj -p:RevitYear=2026 -p:NodeAecCo
 |---|---|---|---|
 | Target framework | `net48` | `net8.0-windows` | `net10.0-windows` |
 
-**2. Install.** Easiest: run the year-matching installer (`release/SamplePlugin-0.1-R<year>-Setup.exe`, produced by `scripts/release.ps1` — one Setup per year). Or copy two files per [API.md §3.3](API.md#33-packaging-contract-manifest--payload-layout--verified):
+**2. Install.** Easiest: run the group-matching installer (`release/SamplePlugin-0.1-R<grupo>-Setup.exe`, produced by `scripts/release.ps1` — one Setup per Revit compatibility group; the wizard lists the group's installed Revit versions so you pick one, or keep "all installed"). Or copy two files per [API.md §3.3](API.md#33-packaging-contract-manifest--payload-layout--verified):
 
 ```
 %ProgramData%\Autodesk\Revit\Addins\<year>\SamplePlugin.addin

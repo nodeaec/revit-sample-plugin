@@ -198,10 +198,10 @@ copy, no shipped copy of the DLL. Everything else in this document follows from 
 Proven against the connector's own packaging — `src/NodeAec.Connector/NodeAec.Connector.addin`
 and `scripts/release.ps1`:
 
-- `release.ps1:121-124` sets `$installDir = "C:\ProgramData\Autodesk\Revit\Addins\$RevitYear\NodeAec.Connector"`
+- `release.ps1:157-163` sets `$installDir = "C:\ProgramData\Autodesk\Revit\Addins\$BuildYear\NodeAec.Connector"`
   and rewrites the template manifest's `<Assembly>` to `"$installDir\$DllName"` (absolute);
-  `release.ps1:166-176` copies the DLLs into `Addins\<year>\NodeAec.Connector\` and the
-  `.addin` into the `Addins\<year>\` **root** (`installer.iss:211-213` writes the same layout).
+  `release.ps1:226-254` copies the DLLs into `Addins\<year>\NodeAec.Connector\` for every installed year of the group and the
+  `.addin` into each `Addins\<year>\` **root** (`installer.iss:315-323` + `453-464` write the same layout).
 - **Canonical layout: manifest at the `Addins\<year>\` root, the add-in's DLLs in a
   dedicated subfolder beside it.** The connector's `<Assembly>` ships absolute (rewritten by
   `release.ps1`); the template's original value is relative to the manifest.
@@ -210,8 +210,8 @@ The sample mirrors that layout exactly — this is the packaging contract for th
 
 | Piece | Sample | Connector (proof) |
 |---|---|---|
-| Manifest location | `%ProgramData%\Autodesk\Revit\Addins\<year>\SamplePlugin.addin` | `Addins\<year>\NodeAec.Connector.addin` (`release.ps1:176`) |
-| `<Assembly>` value | `SamplePlugin\SamplePlugin.dll` (relative to the manifest) → `Addins\<year>\SamplePlugin\SamplePlugin.dll` | absolute `Addins\<year>\NodeAec.Connector\NodeAec.Connector.dll` (`release.ps1:121-124`) |
+| Manifest location | `%ProgramData%\Autodesk\Revit\Addins\<year>\SamplePlugin.addin` | `Addins\<year>\NodeAec.Connector.addin` (`release.ps1:163`) |
+| `<Assembly>` value | `SamplePlugin\SamplePlugin.dll` (relative to the manifest) → `Addins\<year>\SamplePlugin\SamplePlugin.dll` | absolute `Addins\<year>\NodeAec.Connector\NodeAec.Connector.dll` (`release.ps1:157-163`) |
 | `<AddInId>` | own GUID, unique per add-in (never reuse the connector's) | fixed GUID `4B8E1A2C-…` across years |
 | `<FullClassName>` | `SamplePlugin.App` (`IExternalApplication`) | `NodeAec.Connector.App` |
 
