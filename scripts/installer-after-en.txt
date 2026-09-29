@@ -1,0 +1,14 @@
+Installation finished!
+
+Open Autodesk Revit, click the "Node.aec" tab and then the "Hello World"
+button in the "Sample Plugin" panel.
+
+The command checks your license with the Node.aec Connector before running:
+with a valid license it shows the greeting and the license details; without
+one it explains why and offers to open the Connector.
+
+If the button does not show up, make sure you ran the installer matching
+your Revit year (each installer serves exactly one year).
+
+Node.aec support: https://nodeaec.com.br
+Product page: https://nodeaec.com.br/products/revit-sample-plugin
