@@ -665,10 +665,11 @@ var
 begin
   Result := False;
   YearsWithPayload(Present);
-  if GetArrayLength(Present) = 0 then
+  if GetArrayLength(Present) <= 1 then
   begin
-    // No payload found: nothing to choose, run the normal (complete)
-    // uninstall so stale entries/files are cleaned up.
+    // Nothing to choose: with a single year (or none) every choice would be
+    // the same complete uninstall, so skip the dialog (the install wizard
+    // applies the same rule to its year page).
     Result := True;
     Exit;
   end;
@@ -721,12 +722,6 @@ begin
     if (Combo.ItemIndex < 0) or (Combo.ItemIndex = AllIndex) then
     begin
       // "All versions" (the default): complete uninstall.
-      Result := True;
-      Exit;
-    end;
-    if GetArrayLength(Present) = 1 then
-    begin
-      // Removing the only year with payload is a complete uninstall.
       Result := True;
       Exit;
     end;
