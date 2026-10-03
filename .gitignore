@@ -28,3 +28,7 @@ TestResults/
 release/
 stage/
 *.zip
+
+# Build logs (scripts/release.ps1, dotnet build redirects)
+build-*.log
+*.log

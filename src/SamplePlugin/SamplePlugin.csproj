@@ -2,7 +2,7 @@
   <!--
     ============================================================================
     Sample Plugin — reference add-in showing the Node.aec licensing integration
-    (NodeAecGate) inside a third-party Autodesk Revit plugin.
+    (Gate / NodeAec.Licensing.Lite) inside a third-party Autodesk Revit plugin.
 
     Revit-year matrix (mirrors revit-connector/Directory.Build.props, simplified):
       2023 | 2024 -> net48
@@ -59,15 +59,16 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);obj\**;bin\**</DefaultItemExcludes>
 
     <!--
-      INTEGRATION CONTRACT (build-time reference to the installed connector).
-      Default = the connector's canonical runtime location for the selected year:
-        C:\ProgramData\Autodesk\Revit\Addins\<year>\NodeAec.Connector\NodeAec.Connector.dll
-      NOT a NuGet package, NOT a project reference. The DLL is never copied next to
-      this plugin (<Private>False</Private>): at runtime Revit has already loaded the
-      connector from its own add-in folder. Override NodeAecConnectorDll ONLY on CI
-      machines that validate compilation without the connector installed.
+      LICENSING (frozen contract NodeAec.Licensing.Gate):
+        PackageReference NodeAec.Licensing.Lite — the verification code is compiled
+        INTO this plugin, so there is no external DLL to swap. No HintPath, no
+        Private=False, no connector install needed at build time. The only seam is
+        Licensing/NodeAecLicenseGate.cs: Gate.Validate(ProductSlug) as the first
+        statement of every command, branching only on IsLicensed.
+        PRE-RELEASE FEED: version 1.0.0-preview.1 resolves from the local folder
+        feed in NuGet.config (../revit-licensing-lite/.../bin/Release). At release
+        time (Onda 4) delete the local source and restore from NuGet.org.
     -->
-    <NodeAecConnectorDll Condition="'$(NodeAecConnectorDll)' == ''">$(ProgramData)\Autodesk\Revit\Addins\$(RevitYear)\NodeAec.Connector\NodeAec.Connector.dll</NodeAecConnectorDll>
   </PropertyGroup>
 
   <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
@@ -79,11 +80,11 @@
     <RootNamespace>SamplePlugin</RootNamespace>
     <AssemblyName>SamplePlugin</AssemblyName>
     <Version>0.1</Version>
-    <Description>Sample Plugin — reference integration of Node.aec licensing (NodeAecGate) for Autodesk Revit.</Description>
+    <Description>Sample Plugin — reference integration of Node.aec licensing (Gate / Lite) for Autodesk Revit.</Description>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <!-- Autodesk.Windows (AdWindows) surfaces WPF types; same flag the connector uses. -->
     <UseWPF>true</UseWPF>
-    <!-- Dependency DLLs (not RevitAPI, not the connector) travel with the add-in. -->
+    <!-- Dependency DLLs (not RevitAPI) travel with the add-in — including the Lite licensing assembly. -->
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
@@ -93,19 +94,8 @@
     <PackageReference Include="Nice3point.Revit.Api.RevitAPI" Version="$(RevitApiPkgVersion)" PrivateAssets="all" ExcludeAssets="runtime" />
     <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI" Version="$(RevitApiPkgVersion)" PrivateAssets="all" ExcludeAssets="runtime" />
     <PackageReference Include="Nice3point.Revit.Api.AdWindows" Version="$(RevitApiPkgVersion)" PrivateAssets="all" ExcludeAssets="runtime" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <!--
-      The one connector reference of the whole plugin. Private=False: NodeAec.Connector.dll
-      must NEVER be copied beside the sample plugin — Revit loads it from the connector's
-      own add-in folder before this plugin's code runs. If the connector is not installed
-      at HintPath, the build reports an unresolved reference (install the connector first).
-    -->
-    <Reference Include="NodeAec.Connector">
-      <HintPath>$(NodeAecConnectorDll)</HintPath>
-      <Private>False</Private>
-    </Reference>
+    <!-- Offline license verification, compiled into this plugin. No HintPath: resolved from NuGet like any npm dependency. -->
+    <PackageReference Include="NodeAec.Licensing.Lite" Version="0.1.0" />
   </ItemGroup>
 
   <ItemGroup>

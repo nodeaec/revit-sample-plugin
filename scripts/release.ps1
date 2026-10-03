@@ -32,9 +32,6 @@ param(
   [string]$Configuration = "Release",
   # Inno Setup AppId shared by every year (user-supplied identity).
   [string]$AppId = "a61b450f-4226-4edc-ad8d-42613b1555a5",
-  # Compile-only escape hatch for machines without the connector installed:
-  # forwarded to the build as -p:NodeAecConnectorDll=<path>.
-  [string]$NodeAecConnectorDll = "",
   [switch]$Install,
   [switch]$SkipBuild
 )
@@ -99,7 +96,6 @@ $OutDir = Join-Path $RepoRoot "src\SamplePlugin\bin\$BuildYear\$Configuration\$T
 
 if (-not $SkipBuild) {
   $buildArgs = @("build", $Project, "-c", $Configuration, "-p:RevitYear=$BuildYear")
-  if ($NodeAecConnectorDll -ne "") { $buildArgs += "-p:NodeAecConnectorDll=$NodeAecConnectorDll" }
   Write-Host "==> dotnet $($buildArgs -join ' ') ($TargetFramework)"
   & dotnet $buildArgs
   if ($LASTEXITCODE -ne 0) { throw "dotnet build failed ($LASTEXITCODE)" }
@@ -108,12 +104,14 @@ if (-not $SkipBuild) {
 $dll = Join-Path $OutDir $DllName
 if (-not (Test-Path $dll)) { throw "Build output not found: $dll" }
 
-# Stage: clean + copy runtime payload (plugin DLL + deps file; never the
-# connector DLL, never RevitAPI/AdWindows — same rule family as the build).
+# Stage: clean + copy runtime payload (plugin DLL + Lite licensing DLL + deps
+# file; never RevitAPI/AdWindows — same rule family as the build).
+# Unlike the old connector reference, NodeAec.Licensing.Lite travels WITH the
+# plugin (NuGet, CopyLocal): it is the code that verifies the license offline.
 if (Test-Path $StageDir) { Remove-Item $StageDir -Recurse -Force }
 New-Item $StageDir -ItemType Directory -Force | Out-Null
 Get-ChildItem $OutDir -Filter *.dll |
-  Where-Object { $_.Name -notlike "RevitAPI*" -and $_.Name -ne "AdWindows.dll" -and $_.Name -notlike "UIFramework*" -and $_.Name -ne "NodeAec.Connector.dll" } |
+  Where-Object { $_.Name -notlike "RevitAPI*" -and $_.Name -ne "AdWindows.dll" -and $_.Name -notlike "UIFramework*" } |
   Copy-Item -Destination $StageDir -Force
 Get-ChildItem $OutDir -Filter *.deps.json -ErrorAction SilentlyContinue |
   Copy-Item -Destination $StageDir -Force

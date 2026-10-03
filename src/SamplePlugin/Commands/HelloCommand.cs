@@ -9,9 +9,9 @@ namespace SamplePlugin.Commands;
 /// <summary>
 /// Sample commercial command: the license gate runs FIRST at command entry and the
 /// command is <b>never</b> executed unlicensed (fail closed).
-/// <para>Licensed → greets the user and shows the real license fields the connector
-/// exposes. Not licensed / unknown state / any exception → the connector's failure
-/// <c>Message</c> verbatim plus short English guidance and a link that opens the
+/// <para>Licensed → greets the user and shows the real license fields verified locally.
+/// Not licensed / unknown state / any exception → the failure
+/// <c>Message</c> verbatim plus short guidance and a link that opens the
 /// Node.aec Connector, then <see cref="Result.Cancelled"/>.
 /// </para>
 /// </summary>
@@ -35,7 +35,7 @@ public class HelloCommand : IExternalCommand
     /// <returns><see cref="Result.Succeeded"/> only after a licensed greeting; otherwise <see cref="Result.Cancelled"/>.</returns>
     public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
     {
-        // 1) License gate — first statement of the command. Adapter never throws;
+        // 1) License gate — first statement of the command. The seam never throws;
         //    belt-and-braces catch keeps any unexpected state fail-closed.
         GateSnapshot gate;
         try
@@ -49,7 +49,7 @@ public class HelloCommand : IExternalCommand
 
         try
         {
-            // Unknown state (adapter contract violated / nothing to branch on) → fail closed.
+            // Unknown state (seam contract violated / nothing to branch on) → fail closed.
             if (gate is null)
             {
                 return ShowFailClosed();
@@ -102,10 +102,10 @@ public class HelloCommand : IExternalCommand
     }
 
     /// <summary>
-    /// Builds and shows the "not licensed" dialog: the connector's failure
-    /// <c>Message</c> verbatim as the reason, short English guidance covering the
-    /// known situations, and a command link that opens the connector UI through the
-    /// real API (<c>NodeAecGate.OpenConnector()</c>).
+    /// Builds and shows the "not licensed" dialog: the failure
+    /// <c>Message</c> verbatim as the reason, short guidance covering the
+    /// known situations, and a command link that opens the connector UI
+    /// (<c>NodeAecLicenseGate.OpenConnector()</c>).
     /// </summary>
     private static void ShowBlockedDialog(GateSnapshot gate)
     {

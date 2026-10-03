@@ -1,60 +1,56 @@
 # The licensing seam — full walkthrough
 
-Deep detail for step 3 of SKILL.md. Canonical source:
+Deep detail for steps 2 and 5 of SKILL.md. Canonical source:
 `src/SamplePlugin/Licensing/NodeAecLicenseGate.cs` (see also API.md §9
 *Fail-closed recipe (`NodeAecLicenseGate.cs`)*).
 
 ## Design rules
 
-1. **One file knows Node.aec.** Every `NodeAec.Connector` type used by the
+1. **One file knows Node.aec.** Every `NodeAec.Licensing` type used by the
    plugin lives in `NodeAecLicenseGate.cs`. Commands and ribbon code speak only
    plugin-local types (`GateSnapshot`).
-2. **`Validate()` never throws.** Missing connector assembly, corrupt lease,
-   unexpected CLR noise — everything becomes a not-licensed `GateSnapshot`, so
-   callers can always branch on `IsLicensed`.
-3. **JIT isolation.** The CLR resolves `NodeAecGate` while *compiling* a method
-   whose body mentions it. With `<Private>False</Private>` and the connector
-   absent, that resolution fails when the method first runs — so a connector
-   type must never appear in `Validate()`'s own body. The pattern:
+2. **`Validate()` never throws.** Missing lease, corrupt data, unexpected CLR
+   noise — everything becomes a not-licensed `GateSnapshot`, so callers can
+   always branch on `IsLicensed`. (No `ConnectorAvailable` branch: Lite is
+   compiled in via `PackageReference`; a Hub-less machine simply has no lease
+   and validates as not-licensed.)
+3. **No JIT isolation needed.** Lite compiles INTO the plugin assembly, so there
+   is no external DLL whose load can fail at JIT time. The seam stays thin by
+   design — one `Gate.Validate(ProductSlug)` call plus a six-member mapping:
 
    ```csharp
    public static GateSnapshot Validate()
    {
-       try { return RunValidation(); }          // called INSIDE the try
+       try { return RunValidation(); }          // Lite never throws; catch = last resort
        catch (Exception)
        {
            return new GateSnapshot(isLicensed: false,
-               message: ConnectorUnavailableMessage,
+               message: "Node.aec could not verify this plugin's license on this machine, ...",
                productName: null, licenseType: null, licenseKey: null,
-               expiresAt: null, connectorAvailable: false);
+               expiresAt: null);
        }
    }
 
-   private static GateSnapshot RunValidation()  // the ONLY method touching NodeAecGate
+   private static GateSnapshot RunValidation()  // the ONLY method touching Lite types
    {
-       NodeAecGate.GateResult result = NodeAecGate.Validate(ProductSlug);
+       Snapshot snapshot = Gate.Validate(ProductSlug);
        return new GateSnapshot(
-           isLicensed: result.IsLicensed,
-           message: result.Message,
-           productName: result.ProductName,
-           licenseType: result.LicenseType,
-           licenseKey: result.LicenseKey,
-           expiresAt: result.ExpiresAt,
-           connectorAvailable: true);
+           isLicensed: snapshot.IsLicensed,
+           message: snapshot.Message,
+           productName: snapshot.ProductName,
+           licenseType: snapshot.LicenseType,
+           licenseKey: snapshot.LicenseKey,
+           expiresAt: snapshot.ExpiresAt);
    }
    ```
-   Source: [NodeAecLicenseGate.cs:L46-L86](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/Licensing/NodeAecLicenseGate.cs#L46-L86).
 
-   The load failure lands at `RunValidation()`'s call site, inside
-   `Validate()`'s `catch`, and surfaces as a normal fail-closed snapshot.
-   `OpenConnector()` wraps `OpenConnectorCore()` identically (a missing
-   connector degrades to the connector's own silent no-op contract).
-
-4. **Map only the six real members.** `GateResult` = `IsLicensed`,
+   `OpenConnector()` calls `Gate.OpenConnector()` directly (Hub absent = the
+   Lite silent no-op contract).
+4. **Map only the six real members.** `Snapshot` = `IsLicensed`,
    `LicenseType`, `LicenseKey`, `ProductName`, `ExpiresAt`, `Message`. Payload
    fields are `null` on failure. No licensee, plan, seat counts, machine id,
    entitlement slug/status, trial flag, or status enum exists (API.md §4.2
-   *`NodeAecGate.GateResult` — every member*).
+   *`Snapshot` — every member*, API.md §13 for the Lite mapping).
 5. **`IsLicensed` is the only branch point.** `Message` is display text —
    Portuguese, free-form, may change between connector versions. Show it
    verbatim; never translate it and never string-match it to decide behavior.
@@ -64,10 +60,9 @@ Deep detail for step 3 of SKILL.md. Canonical source:
 | Member | Role |
 |---|---|
 | `public const string ProductSlug = "revit-sample-plugin";` | The one constant to change when adapting |
-| `public const string ConnectorUnavailableMessage` | English fail-closed text used when the assembly cannot be loaded at all (`ConnectorAvailable == false`) — distinct from the connector's own Portuguese messages |
 | `public static GateSnapshot Validate()` | Entry point; never throws; returns a snapshot (never `null`) |
-| `private static GateSnapshot RunValidation()` | Single place `NodeAecGate.Validate(ProductSlug)` is read |
-| `public static void OpenConnector()` | Courtesy deep link; wrapper so absence = silent no-op |
+| `private static GateSnapshot RunValidation()` | Single place `Gate.Validate(ProductSlug)` (Lite) is read |
+| `public static void OpenConnector()` | Courtesy deep link; Hub absent = Lite silent no-op |
 | `public static string BuildLicenseBlock(GateSnapshot)` | Licensed-dialog content: Product / Type / License key / Valid until / Status; `ExpiresAt == null` renders `no expiry recorded (perpetual)` |
 
 ## Command-side shape (`SamplePlugin.Commands.HelloCommand`)
@@ -101,11 +96,13 @@ Source: [HelloCommand.cs:L36-L80](https://github.com/nodeaec/revit-sample-plugin
 
 `ShowBlockedDialog` builds a `TaskDialog` whose `MainContent` starts with
 `Reason reported by Node.aec:\n{gate.Message}`, adds fixed guidance bullets
-(sign in / renew / buy `'revit-sample-plugin'` / connector missing / seat limit /
+(sign in / renew / buy `'revit-sample-plugin'` / Hub missing / seat limit /
 offline grace), adds `AddCommandLink(... "Open Node.aec Connector...")` calling
 `NodeAecLicenseGate.OpenConnector()` only on click, and the command then
 returns `Result.Cancelled`. There is no code path past the gate without a
-license.
+license. (Historical note: an early Hub-DLL-reference seam carried a
+`ConnectorAvailable == false` branch for "assembly missing" — Lite is always
+present, so Hub-less now reads as no-lease.)
 
 ## Threading reminder (API.md §7)
 

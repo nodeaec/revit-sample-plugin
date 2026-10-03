@@ -4,7 +4,8 @@ Deep detail for step 8 of SKILL.md.
 
 ## 1. Build matrix
 
-SDK-style csproj; the year selects the TFM and the connector HintPath folder:
+SDK-style csproj; the year selects the TFM and the Lite package restores from
+NuGet (no DLL override, no `HintPath` — API.md §13):
 
 ```bash
 dotnet build src/SamplePlugin/SamplePlugin.csproj -p:RevitYear=2023   # net48
@@ -15,15 +16,15 @@ dotnet build src/SamplePlugin/SamplePlugin.csproj -p:RevitYear=2027   # net10.0-
 ```
 Source: canonical forms documented in [SamplePlugin.csproj:L16-L18](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/SamplePlugin.csproj#L16-L18).
 
-Machine without the connector installed (CI compile-only):
-
-```bash
-dotnet build src/SamplePlugin/SamplePlugin.csproj -p:RevitYear=2026 \
-  -p:NodeAecConnectorDll=/path/to/NodeAec.Connector.dll
-```
+Restore failure now reads `NU1101` (package not found — check the feed/version),
+not the legacy `MSB3245` (pre-Lite `HintPath` miss, kept as history in AGENTS.md
+§5). No `-p:NodeAecConnectorDll` anymore: nothing points at a loose DLL.
 
 Payload hygiene — the `release/`/`stage/` output must contain **neither**
-`RevitAPI*.dll` **nor** `NodeAec.Connector.dll`. Manifest layout:
+`RevitAPI*.dll`/`AdWindows.dll` **nor** `NodeAec.Connector.dll`, while Lite and
+its deps **travel together** (`NodeAec.Licensing.Lite.dll`,
+`BouncyCastle.Cryptography.dll`, plus `System.Text.Json.dll` /
+`System.Security.Cryptography.ProtectedData.dll` on net48 only). Manifest layout:
 
 ```
 %ProgramData%\Autodesk\Revit\Addins\<year>\SamplePlugin.addin          (root)
@@ -33,24 +34,32 @@ Source: [SamplePlugin.addin](https://github.com/nodeaec/revit-sample-plugin/blob
 
 ## 2. Manual Revit test script
 
-Run all five cases on a real Revit session per supported year (DPAPI needs an
+Run all six cases on a real Revit session per supported year (DPAPI needs an
 interactive logon — CI/headless cannot cover this). Record: dialog shown,
 `Message` text, button behavior, and the command's return.
 
 | # | Case | Setup | Expected |
 |---|---|---|---|
-| 1 | **No connector** | Uninstall the Node.aec Connector for that year (or rename its `Addins\<year>\NodeAec.Connector\` folder), restart Revit | Command still loads; gate fails at the seam; blocked dialog with `ConnectorUnavailableMessage`; `Open Node.aec Connector...` click is a silent no-op; `Result.Cancelled`; no crash |
-| 2 | **Not signed in** | Connector installed; clear the session / sign out (lease absent) | Blocked dialog showing connector `Message` verbatim (`Nenhuma credencial do Node.aec encontrada nesta estação…`); command link opens the connector UI; `Result.Cancelled` |
-| 3 | **No entitlement** | Signed in with an account that lacks slug `revit-sample-plugin` (or a typo'd `ProductSlug`) | Blocked dialog with `O produto 'revit-sample-plugin' não consta nas licenças ativas desta conta…` verbatim; `Result.Cancelled` |
-| 4 | **Expired** | Entitlement past `ExpiresAt` (test account, or wait out offline grace) | Blocked dialog with `A licença ou período de teste de '…' expirou em {dd/MM/yyyy}.` verbatim; `Result.Cancelled` |
-| 5 | **Valid** | Connector installed, signed in, entitled for `revit-sample-plugin` | Licensed greeting; license block shows Product / Type / License key / Valid until / Status from the real fields; `Result.Succeeded` |
+| 1 | **Licensed (valid)** | Connector installed, signed in, entitled for `revit-sample-plugin` | Licensed greeting; license block shows Product / Type / License key / Valid until / Status from the real fields; `Result.Succeeded` |
+| 2 | **Blocked — not signed in** | Connector installed; clear the session / sign out (lease absent) | Blocked dialog showing gate `Message` verbatim (`Nenhuma credencial do Node.aec encontrada nesta estação…`); command link opens the connector UI; `Result.Cancelled` |
+| 3 | **Blocked — no entitlement** | Signed in with an account that lacks slug `revit-sample-plugin` (or a typo'd `ProductSlug`) | Blocked dialog with `O produto 'revit-sample-plugin' não consta nas licenças ativas desta conta…` verbatim; `Result.Cancelled` |
+| 4 | **Blocked — expired** | Entitlement past `ExpiresAt` (test account, or wait out offline grace) | Blocked dialog with `A licença ou período de teste de '…' expirou em {dd/MM/yyyy}.` verbatim; `Result.Cancelled` |
+| 5 | **No lease (Hub absent)** | Uninstall the Node.aec Connector for that year (or rename its `Addins\<year>\NodeAec.Connector\` folder), restart Revit | Command still loads; gate reads no lease; blocked dialog with `Nenhuma credencial…` verbatim; `Open Node.aec Connector...` click is a silent no-op; `Result.Cancelled`; no crash |
+| 6 | **Reload (no ghost tab)** | Add-In Manager → reload the add-in twice | Still one `Node.aec` tab, one button (idempotency + AdWindows dedup hooks) |
+
+## 3. `nodeaec-verify` (concept — future SHALL, no real script today)
+
+Confirmed: `scripts/` contains only `release.ps1`/`installer.iss` (+afters). CI
+SHALL gain a `nodeaec-verify` that fails when: the payload contains
+`RevitAPI*`/`AdWindows`/`UIFramework*`/`NodeAec.Connector.dll`; the manifest is outside the
+year root or `<Assembly>` is not relative; a `HintPath.*NodeAec.Connector` or
+`ProjectReference.*Connector` remains in the csproj; `ProtectedData.dll` is outside the
+net48 payload. Until it exists, the checklist grep (API.md §14) applies — do not quote
+a script path as if it existed.
 
 Cross-checks after the run:
 
-- Ribbon: shared `Node.aec` tab with panel `Sample Plugin` and button
-  `Hello World`; reload the add-in (Add-In Manager) twice — still one tab, one
-  button (idempotency + AdWindows dedup hooks).
 - `%APPDATA%\NodeAec\connector.log` for cases 2–4 (`WARN`/`ERROR` lines, never
   tokens or keys).
-- Negative network test: run cases 2–5 with the machine offline — offline is
+- Negative network test: run cases 1–5 with the machine offline — offline is
   not a failure (API.md §5); only lease expiry (case 4) differs.

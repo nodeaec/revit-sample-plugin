@@ -59,8 +59,8 @@ public class App : IExternalApplication
         }
         catch (Exception)
         {
-            // Revit reports the add-in failure. No connector logging here on purpose:
-            // this class must not depend on NodeAec.Connector at JIT time.
+            // Revit reports the add-in failure. No licensing calls here on purpose:
+            // this class must not depend on NodeAec.Licensing at JIT time.
             return Result.Failed;
         }
     }
