@@ -5,7 +5,7 @@ Deep detail for step 8 of SKILL.md.
 ## 1. Build matrix
 
 SDK-style csproj; the year selects the TFM and the Lite package restores from
-NuGet (no DLL override, no `HintPath` — API.md §13):
+NuGet (API.md §13):
 
 ```bash
 dotnet build src/SamplePlugin/SamplePlugin.csproj -p:RevitYear=2023   # net48
@@ -16,9 +16,7 @@ dotnet build src/SamplePlugin/SamplePlugin.csproj -p:RevitYear=2027   # net10.0-
 ```
 Source: canonical forms documented in [SamplePlugin.csproj:L16-L18](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/SamplePlugin.csproj#L16-L18).
 
-Restore failure now reads `NU1101` (package not found — check the feed/version),
-not the legacy `MSB3245` (pre-Lite `HintPath` miss, kept as history in AGENTS.md
-§5). No `-p:NodeAecConnectorDll` anymore: nothing points at a loose DLL.
+A restore failure reads `NU1101` (package not found — check the feed/version).
 
 Payload hygiene — the `release/`/`stage/` output must contain **neither**
 `RevitAPI*.dll`/`AdWindows.dll` **nor** `NodeAec.Connector.dll`, while Lite and

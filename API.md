@@ -34,12 +34,6 @@ strings (Portuguese) are quoted exactly — never translate or re-word them in c
 13. [Migrating an existing plugin to Lite](#13-migrating-an-existing-plugin-to-lite)
 14. [Agent / CI verification track](#14-agent--ci-verification-track)
 
-> **Migration status (Wave 3, plan `licensing-lite-templates-plan.md`):** §§1–12
-> describe the Connector-reference integration as built; §§13–14 are authoritative
-> for the Lite target (`NodeAec.Licensing.Gate.Validate`, package
-> `NodeAec.Licensing.Lite`). Where they conflict, §§13–14 win until the code
-> migration (S1) lands.
-
 ---
 
 ## 1. Overview & responsibility split
@@ -113,34 +107,31 @@ Setup behind those two calls (details in §3): a `PackageReference` to
 
 How the dependency works, in one paragraph: your project declares the license
 package from NuGet via `PackageReference`, the verification
-code compiles *into* your DLL so there is no external DLL to swap, and your
+code compiles *into* your DLL, and your
 installer drops your own manifest + DLL per Revit year. The subsections below
-are the exact MSBuild, the rejected alternatives, and the folder layout.
+are the exact MSBuild, the one integration path, and the folder layout.
 
 ### 3.1 The contract (declare exactly)
 
 ```xml
 <ItemGroup>
   <!-- Offline license verification, compiled INTO this plugin.
-       Resolved from NuGet via PackageReference — no HintPath, no loose DLL. -->
+       Resolved from NuGet via PackageReference — nothing loose to deploy. -->
   <PackageReference Include="NodeAec.Licensing.Lite" Version="1.0.0-preview.1" />
 </ItemGroup>
 ```
 Source: [SamplePlugin.csproj:L98](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/SamplePlugin.csproj#L98) (pre-release feed: local folder `NuGet.config` → Lite `1.0.0-preview.1`; NuGet.org at release — §8.2).
 
-- **NOT a `Reference` + `HintPath` to an installed DLL** — the retired path pointed
-  at `%ProgramData%\Autodesk\Revit\Addins\<year>\NodeAec.Connector\NodeAec.Connector.dll`
-  with `<Private>False</Private>` and needed the connector installed just to compile.
-  That reference is gone: any single DLL with the right name and class could stand in
-  for the decision (attack A in the plan), so the decision moved inside your assembly.
-- **NOT a `ProjectReference`** — Lite is a versioned public package with its own
+- **The licensing decision compiles into your assembly.** A loose DLL with the right
+  name and class could stand in for the decision (attack A in the plan), so the
+  decision lives inside your plugin and ships with it.
+- **Not a `ProjectReference`** — Lite is a versioned public package with its own
   release cadence (`1.0.0-preview.1` at the time of writing), not a sibling repo.
 - **Never copy `NodeAec.Connector.dll` next to the plugin** (never into your add-in
-  folder, `release/` or `stage/`). There is simply nothing to copy anymore: the only
-  license assembly is Lite, and it travels *inside* your payload via
-  `CopyLocalLockFileAssemblies=true` — same rule family as "never copy `RevitAPI*.dll`",
-  inverted: Revit assemblies stay out, Lite goes in.
-- **No `NodeAecConnectorDll` property, no compile-only escape hatch.** A machine
+  folder, `release/` or `stage/`). The only license assembly is Lite, and it travels
+  *inside* your payload via `CopyLocalLockFileAssemblies=true` — same rule family as
+  "never copy `RevitAPI*.dll`", inverted: Revit assemblies stay out, Lite goes in.
+- **No extra MSBuild properties to set.** A machine
   without the Hub builds identically — `dotnet build` restores the Lite package
   (pre-release: local folder feed via `NuGet.config`; at release: NuGet.org —
   §8.2); the only build-time requirement is that the feed resolve. If restore
@@ -154,24 +145,21 @@ Source: [SamplePlugin.csproj:L98](https://github.com/nodeaec/revit-sample-plugin
   `Gate.Validate` always runs (Lite is compiled in) and reads the lease file; with no
   credentials on the machine it returns the ordinary failure #2 (`Nenhuma
   credencial…`, §5) — the same message as "never signed in". There is no separate
-  "assembly missing" state anymore: the old seam's `ConnectorAvailable == false` with
-  its English `ConnectorUnavailableMessage` is retired. `Gate.OpenConnector()`
+  "assembly missing" state: a machine with no Hub simply has no lease.
+  `Gate.OpenConnector()`
   degrades to a silent no-op when the Hub UI is unreachable (§4.3, §9).
 
-### 3.2 README-vs-skill conflict — this document resolves it
+### 3.2 Exactly one integration path
 
-The connector repository documented **two contradictory** integration strategies,
-and both are now retired for new plugins:
-
-| Source | Strategy | Status |
-|---|---|---|
-| connector `README.md`, section *Como Integrar Plugins Parceiros com o `NodeAecGate`* | Assembly reference: `using NodeAec.Connector.Gate;` + `NodeAecGate.Validate(...)` — but it never explains **how** to obtain the reference (no HintPath recipe, no NuGet, no copy step) | Retired: superseded by the Lite package (§3.1) |
-| connector skill `.agents/skills/licensing-integrate` Recipe 2 | **Copy** `Gate/NodeAecGate.cs`, `Hardware/HardwareId.cs` and "`Cryptography/`, `Storage/`, `Models/`" into the plugin | Retired: incomplete as written (the real transitive closure also needs `Config/ConnectorConfig.cs`, `Diagnostics/ConnectorLog.cs`, `Storage/SigningKeyStore.cs`, `Models/UserSessionClaims.cs` plus `BouncyCastle.Cryptography 2.7.0` and net48 `System.Text.Json`/`System.Net.Http`), and hand-copied crypto diverges from the audited package |
-
-**Resolution (authoritative for this repository): use the `PackageReference` to
-`NodeAec.Licensing.Lite` of §3.1.** No `Reference` + `HintPath` +
-`<Private>False</Private>`, no NuGet-less DLL, no project reference, no source
-copy, no shipped copy of `NodeAec.Connector.dll`. Everything else in this document follows from that choice. (Historical note: the retired `Reference` + `HintPath` recipe is not a migration source — §13 adopts standalone plugins with no prior Node.aec integration.)
+Authoritative for this repository: declare the `PackageReference` to
+`NodeAec.Licensing.Lite` of §3.1 — that is the whole dependency. Nothing else
+supplies the gate: no assembly reference to an installed DLL, no `ProjectReference`,
+no vendored copy of gate source (the real transitive closure of a source copy also
+needs `Config/ConnectorConfig.cs`, `Diagnostics/ConnectorLog.cs`,
+`Storage/SigningKeyStore.cs`, `Models/UserSessionClaims.cs` plus
+`BouncyCastle.Cryptography 2.7.0` and net48 `System.Text.Json`/`System.Net.Http`,
+and hand-copied crypto diverges from the audited package), and no shipped copy of
+`NodeAec.Connector.dll`. Everything else in this document follows from that choice.
 
 ### 3.3 Packaging contract (manifest + payload layout) — verified
 
@@ -267,8 +255,8 @@ public static Snapshot Failure(string message);   // payload members all null
 **Not exposed — do not invent them:** licensee/account, plan, seat counts
 (`maxActivations`/`activeActivations` exist on the internal model but never surface here),
 machine id, entitlement `slug`, `status`, `granted`, trial flag, offline-grace days, lease
-`exp`, correlation id, any enum/status code, and — retired with the old seam — any
-`ConnectorAvailable` flag. If you need machine-readable reasons: no such
+`exp`, correlation id, any enum/status code, and any Hub-availability flag. If you need
+machine-readable reasons: no such
 public API exists.
 
 ### 4.3 `Gate.OpenConnector()` and deep links
@@ -301,7 +289,7 @@ Hub-side issues (sync, sign-in):
 |---|---|---|
 | Hub log file | `%APPDATA%\NodeAec\connector.log` | Written by the Hub only; absent when the Hub is not installed |
 
-- Usage rule (Hub contract, unchanged): log lines **must never** contain JWT
+- Usage rule (Hub contract): log lines **must never** contain JWT
   tokens, license keys, e-mails or hardware ids — only error type + display-ready text.
 
 ### 4.5 Supporting public types (available, but secondary)
@@ -368,7 +356,7 @@ Notes:
 - **Not authenticated vs Hub-not-installed share message #2** (see row 2) — the gate
   reads only the lease file, so a machine without the Hub looks identical to a machine
   where nobody ever logged in. There is deliberately no separate state to distinguish
-  them (the retired `ConnectorAvailable` seam flag is gone — §3.1, §9).
+  them (§3.1, §9).
 - **Offline is not a failure**: `Validate` never touches the network, so being offline looks
   exactly like being online; validity is bounded only by the lease's `exp` (row 11).
 - Hub-side API error codes (`LICENSE_EXPIRED`, `MACHINE_MISMATCH`, `ACTIVATION_LIMIT_REACHED`,
@@ -399,7 +387,7 @@ seam (§9).
 
 **OPTIONAL helpers, explicit tradeoff:** `NodeAec.Connector.App.DeduplicateRibbonTabs(string)`
 and `NodeAec.Connector.App.CleanRogueRibbonElements()` *are* `public static` and wrap their
-bodies in `catch { }`. You **may** call them instead of replicating — convenience (always
+bodies in `catch { }`. You **may** call them rather than replicate — convenience (always
 the connector's exact algorithm, ~40 fewer lines) **vs** forcing the `NodeAec.Connector`
 assembly to load and JIT in your process the first time your handler runs, i.e. your Ribbon
 layer hard-depends on the connector being installed — the dependency the sample's `App.cs`
@@ -415,7 +403,7 @@ defensive fallback if you already accept the load dependency.
 | **MUST NOT** create a plugin-owned tab | No second tab per plugin — ever. Panel thematically inside `Node.aec` instead |
 | **MUST** catch tab-creation failure with a **filtered** exception | `catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ArgumentException \|\| ex is ArgumentException)` — "tab already exists" is the *only* expected failure; a bare `catch {}` masks real errors (the connector itself explicitly rejects bare catches) |
 | **MUST** insert panel/button **idempotently** | Panel: `GetRibbonPanels(tab).FirstOrDefault(p => p.Name == panelName OrdinalIgnoreCase) ?? CreateRibbonPanel(tab, panelName)`. Button: scan `panel.GetItems()` by `Name` before `AddItem`. Revit add-in reloads (Add-In Manager) otherwise throw `ArgumentException` or duplicate buttons. The connector's helpers doing this are **`private`** (`GetOrCreatePanel`, `AddButtonIfMissing`, `AddStackedButtonsIfMissing`) and `RibbonDecisions` is **`internal`** — **you must replicate the logic**, you cannot call them |
-| **MUST** register AdWindows dedup hooks | `ControlledApplication.ApplicationInitialized` and `ComponentManager.UIElementActivated`, each with `-=` **before** `+=` on the named static handler so reloaded add-ins don't stack delegates. Handlers re-run **your local** dedup (replicated algorithm below): merge ghost/duplicate `Node.aec` tabs (keep first, move missing panels, set `duplicateTab.IsVisible = false` and remove it) — connector-free, per the recommended pattern. Stripping legacy `License`/`Licensing` rogue tabs is the connector's `CleanRogueRibbonElements()` job: its own hooks already do it, replicating/calling it is optional (next row) |
+| **MUST** register AdWindows dedup hooks | `ControlledApplication.ApplicationInitialized` and `ComponentManager.UIElementActivated`, each with `-=` **before** `+=` on the named static handler so reloaded add-ins don't stack delegates. Handlers re-run **your local** dedup (replicated algorithm below): merge ghost/duplicate `Node.aec` tabs (keep first, move missing panels, set `duplicateTab.IsVisible = false` and remove it) — connector-free, per the recommended pattern. Stripping rogue `License`/`Licensing` tabs is the connector's `CleanRogueRibbonElements()` job: its own hooks already do it, replicating/calling it is optional (next row) |
 | **MAY** (OPTIONAL) call the connector's public dedup helpers | `NodeAec.Connector.App.DeduplicateRibbonTabs(string targetTitle)` / `NodeAec.Connector.App.CleanRogueRibbonElements()` are `public static` and swallow their own errors, **but calling them loads `NodeAec.Connector` into your process at Ribbon time** (JIT) — convenience vs connector-free startup, see the tradeoff above. **[Uncertain]** public-but-undocumented partner API; the sample's `App.cs` does **not** call them |
 | **MUST NOT** rely on `RibbonDecisions` / private helpers | `internal`/`private` — invisible outside the connector assembly |
 | **MUST** load icons with `BitmapCacheOption.OnLoad` + `Freeze()` | Otherwise Revit keeps the PNG file locked; mirror `App.LoadButtonIcons` (`UriKind.Absolute`, `CacheOption = OnLoad`, `Freeze()`) |
@@ -569,8 +557,7 @@ resolves per year. Find your year in the table, build with that `RevitYear`, don
 
 Build with `dotnet build -p:RevitYear=<2023..2027>` (default `2026`); the year defines the
 `REVIT2023`…`REVIT2027` compilation constant and isolates `obj\<year>\`/`bin\<year>\`.
-The license package resolves for every year alike — no per-year
-connector folder, no `-p:NodeAecConnectorDll` override (retired). Pre-release it
+The license package resolves for every year alike. Pre-release it
 restores from the local folder feed (`NuGet.config` → Lite `bin/Release`); at
 release it restores from NuGet.org with no csproj change (§8.2).
 
@@ -628,15 +615,14 @@ Notes:
 ## 9. Fail-closed recipe (`NodeAecLicenseGate.cs`)
 
 The copy-paste seam. One file sits between your commands and the Lite package so
-every gate outcome — including any surprise — becomes a clean denial instead of a
+every gate outcome — including any surprise — becomes a clean denial, not a
 crash. Port it verbatim, change the slug, keep licensing types inside it.
 
-Consistent with the template's `Licensing/NodeAecLicenseGate.cs` (final shape;
-this sample's `src/` adopts it in S1): **one product slug constant** (the one thing
+Consistent with the template's `Licensing/NodeAecLicenseGate.cs` (the shape this
+sample's `src/` uses): **one product slug constant** (the one thing
 to change when adapting) and a seam that *cannot* crash the command —
-`Validate()` returns a plugin-local `GateSnapshot` and never throws. There is no
-`ConnectorAvailable` flag and no `ConnectorUnavailableMessage`: Lite is compiled
-in, so "Hub missing" and "never signed in" are the same ordinary failure #2
+`Validate()` returns a plugin-local `GateSnapshot` and never throws. Lite is
+compiled in, so "Hub missing" and "never signed in" are the same ordinary failure #2
 (`Nenhuma credencial…`, §5).
 
 ```csharp
@@ -722,10 +708,9 @@ public sealed class GateSnapshot
 }
 ```
 
-Why the seam is this thin now: the old JIT-isolation boundary (wrapping every
-connector-type touch so a missing `NodeAec.Connector.dll` landed in a `catch` as
-`ConnectorAvailable = false`) retired with the `Reference` itself — there is no
-external assembly left to miss. `Validate()`'s `try` stays as a last-resort
+Why the seam is this thin: Lite compiles *into* the plugin assembly, so there is
+no external assembly whose load can fail at JIT time.
+`Validate()`'s `try` stays as a last-resort
 fail-closed guard, and commands keep their defensive `try/catch` + null guard
 around the call. When no lease exists, `Gate.Validate` runs normally and returns
 failure #2; `OpenConnector()` either opens the Hub window or silently no-ops.
@@ -755,8 +740,8 @@ of your failure below before re-reading the earlier sections.
 
 **Q: My plugin fails to restore right after scaffolding (`NU1101`).**
 The `PackageReference` to `NodeAec.Licensing.Lite` resolves from NuGet.org (§3.1, §8) —
-check feed access and the pinned version. Never "fix" it with a DLL reference: there is
-no connector DLL to point at, and the build must stay connector-free.
+check feed access and the pinned version. Never "fix" it with a DLL reference: the build
+stays package-only.
 
 **Q: Nothing happens when the user clicks my "open connector" link.**
 By contract `OpenConnector()` is a silent no-op when the connector UI cannot be reached
@@ -794,8 +779,8 @@ Expected: `ProtectedData … CurrentUser` needs a real interactive logon session
 fail-closed by design otherwise). Validate license persistence manually inside a real Revit
 session; do not weaken storage or skip tests to work around it.
 
-**Q: May I vendor the gate source into my plugin instead of the package?**
-Not in this repository — §3.2 rejects the source-copy path (incomplete dependency closure,
+**Q: May I vendor the gate source into my plugin rather than take the package?**
+Not in this repository — §3.2 rules out the source-copy path (incomplete dependency closure,
 maintenance burden, divergent versions). Exactly one integration path is authoritative here.
 
 **Q: Where do I see what happened when a validation fails?**
@@ -826,7 +811,7 @@ maintenance burden, divergent versions). Exactly one integration path is authori
 | **AdWindows** | `Autodesk.Windows` (AdWindows.dll) — low-level Ribbon API used for tab deduplication |
 | **Ghost tab** | Duplicate/rogue Ribbon tab left by add-in reloads; removed by your local dedup (replica of `App.DeduplicateRibbonTabs`) or, optionally, the connector's `DeduplicateRibbonTabs`/`CleanRogueRibbonElements` (§6 tradeoff) |
 | **`.addin`** | Revit manifest in `%ProgramData%\Autodesk\Revit\Addins\<year>\` pointing at an assembly |
-| **`RevitYear`** | MSBuild property `2023`–`2027` selecting TFM, API packages and connector folder |
+| **`RevitYear`** | MSBuild property `2023`–`2027` selecting TFM and API packages |
 | **TFM** | Target framework: `net48`, `net8.0-windows`, `net10.0-windows` per year |
 | **Hub / ConnectorApiClient** | Connector's internal HTTP client + cloud API — out of bounds for plugins |
 
@@ -844,8 +829,8 @@ maintenance burden, divergent versions). Exactly one integration path is authori
   at that commit.
 - Sample-side identifiers (`App`, `HelloCommand`, `NodeAecLicenseGate.Validate()` →
   `GateSnapshot`, `SamplePlugin.addin`) match the template output for
-  `-n SamplePlugin -p ProductSlug=revit-sample-plugin` and the migrated `src/`
-  (S1: `using`-only + csproj, landed in the working tree), and `Source:` links above
+  `-n SamplePlugin -p ProductSlug=revit-sample-plugin` and the shipped `src/`
+  code, and `Source:` links above
   point at the authoritative location for each excerpt.
 - Related documents in this repository: [`README.md`](README.md) · [`AGENTS.md`](AGENTS.md) ·
   [`.agents/skills/nodeaec-connector-integration/SKILL.md`](.agents/skills/nodeaec-connector-integration/SKILL.md)
@@ -872,8 +857,8 @@ public static class Gate {
 
 `Snapshot` has exactly six members — `IsLicensed` (the only branch point),
 `Message` (PT-BR verbatim, same taxonomy as §5), `ProductName`, `LicenseType`,
-`LicenseKey`, `ExpiresAt` (`null` = no claim / perpetual). There is no
-`ConnectorAvailable`: Lite ships compiled in, so "Hub absent" becomes
+`LicenseKey`, `ExpiresAt` (`null` = no claim / perpetual). Lite ships compiled in,
+so "Hub absent" becomes
 "no lease" (`Nenhuma credencial…`, §5 #2), never a load crash. Each
 `IExternalCommand.Execute` calls the gate as its first statement
 (`NodeAecLicenseGate.Validate()`), fail-closed with `Result.Cancelled`.
@@ -895,9 +880,8 @@ which declares (version pinned per §8.2):
 <PackageReference Include="NodeAec.Licensing.Lite" Version="1.0.*" />
 ```
 
-No `Reference`, no `HintPath`, no `ProjectReference`, no DLL copy: the decision
-compiles into your assembly and restores from NuGet, so a machine without the
-Hub builds identically.
+The decision compiles into your assembly and restores from NuGet, so a machine
+without the Hub builds identically — nothing to copy or wire.
 
 **Step 3 — Wrap each billable `Execute`.** Inventory every
 `IExternalCommand.Execute` (and any other entry point that runs licensed work);
@@ -948,8 +932,8 @@ before `AddItem`), AdWindows hooks with `-=` before `+=`
 (`ApplicationInitialized`, `UIElementActivated`), and `App.cs` stays
 connector-free (own types only; zero licensing calls at startup).
 
-**Step 5 — Build matrix.** Same command, no DLL override (restore comes from
-NuGet; the typical failure becomes `NU1101`, no longer `MSB3245`):
+**Step 5 — Build matrix.** Same command; restore comes from
+NuGet (a restore failure reads `NU1101` — feed or version):
 
 ```bash
 dotnet build -p:RevitYear=2023   # net48
@@ -976,9 +960,6 @@ root (`Addins\<year>\YourPlugin.addin`), relative `<Assembly>`
 Being offline is not a failure (§5): only `exp` bounds validity. Cross-check with
 `%APPDATA%\NodeAec\connector.log` in cases 2–3 (`WARN`/`ERROR`, never secrets).
 
-*Historical note — early adopters on the Hub DLL reference: replace the
-`<Reference Include="NodeAec.Connector">` block with the Step-2 `PackageReference` Lite; contact for mapping.*
-
 ---
 
 ## 14. Agent / CI verification track
@@ -991,7 +972,7 @@ Executable checklist (human or agent, same order):
 - [ ] `grep -rn 'HintPath.*NodeAec' --include='*.csproj' src/` empty and no
   `ProjectReference.*Connector` (no DLL reference of any kind — Lite arrives via
   `PackageReference`)
-- [ ] `2023..2027` matrix compiles with 0 errors (no DLL-path property; restore
+- [ ] `2023..2027` matrix compiles with 0 errors (restore
   failures read `NU1101`)
 - [ ] payload with no `RevitAPI*.dll`, `AdWindows.dll`, `NodeAec.Connector.dll`;
   Lite + deps ship together (`ProtectedData.dll` only on net48)

@@ -11,11 +11,9 @@ Deep detail for steps 2 and 5 of SKILL.md. Canonical source:
    plugin-local types (`GateSnapshot`).
 2. **`Validate()` never throws.** Missing lease, corrupt data, unexpected CLR
    noise — everything becomes a not-licensed `GateSnapshot`, so callers can
-   always branch on `IsLicensed`. (No `ConnectorAvailable` branch: Lite is
-   compiled in via `PackageReference`; a Hub-less machine simply has no lease
+   always branch on `IsLicensed`. (A Hub-less machine simply has no lease
    and validates as not-licensed.)
-3. **No JIT isolation needed.** Lite compiles INTO the plugin assembly, so there
-   is no external DLL whose load can fail at JIT time. The seam stays thin by
+3. **Lite compiles into the plugin assembly.** The seam stays thin by
    design — one `Gate.Validate(ProductSlug)` call plus a six-member mapping:
 
    ```csharp
@@ -100,9 +98,7 @@ Source: [HelloCommand.cs:L36-L80](https://github.com/nodeaec/revit-sample-plugin
 offline grace), adds `AddCommandLink(... "Open Node.aec Connector...")` calling
 `NodeAecLicenseGate.OpenConnector()` only on click, and the command then
 returns `Result.Cancelled`. There is no code path past the gate without a
-license. (Historical note: an early Hub-DLL-reference seam carried a
-`ConnectorAvailable == false` branch for "assembly missing" — Lite is always
-present, so Hub-less now reads as no-lease.)
+license.
 
 ## Threading reminder (API.md §7)
 

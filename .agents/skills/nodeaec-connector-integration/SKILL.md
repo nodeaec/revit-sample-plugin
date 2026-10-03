@@ -29,7 +29,7 @@ functionality.
 
 Migrating an existing STANDALONE plugin (no Node.aec integration yet) to Lite
 for the first time follows this same workflow, except Step 1 becomes
-"inventory every billable `IExternalCommand.Execute`" instead of scaffolding —
+"inventory every billable `IExternalCommand.Execute`" (no scaffolding) —
 full trail in API.md §13 *Migrating an existing plugin to Lite*.
 
 ## 2. Prerequisites
@@ -61,16 +61,16 @@ full trail in API.md §13 *Migrating an existing plugin to Lite*.
    csproj with the Lite `PackageReference`, and `scripts/release.ps1` per group.
    *Decision point:* never start from an empty csproj and hand-wire licensing.
 
-2. **Confirm the slug.** It was set at scaffold time; verify
+2. **Confirm the slug.** The scaffold sets it; verify
    `NodeAecLicenseGate.ProductSlug` matches your catalog slug exactly
    (matching is trim + case-insensitive). This is the **one** constant you change.
    Code details: [`references/licensing-seam.md`](references/licensing-seam.md).
 
-3. **Keep the package reference, never a DLL reference** (API.md §3 *The
+3. **Keep the package reference — it is the whole dependency** (API.md §3 *The
    integration path (authoritative)*). The scaffold already declares exactly one
    `<PackageReference Include="NodeAec.Licensing.Lite" Version="1.0.0-preview.1">`
-   — resolved from NuGet, compiled into your plugin. Never add a `Reference` +
-   `HintPath` to an installed connector DLL, never a `ProjectReference`,
+   — resolved from NuGet, compiled into your plugin. Never add a `Reference` to an
+   installed connector DLL, never a `ProjectReference`,
    **never copy a connector DLL next to your plugin**. Ship your `.addin` at the
    `Addins\<year>` **root** with relative `<Assembly>MyPlugin\MyPlugin.dll</Assembly>`
    pointing into your payload subfolder (the Lite assembly travels inside it).
@@ -137,7 +137,7 @@ full trail in API.md §13 *Migrating an existing plugin to Lite*.
 | Pitfall | Why it hurts | Do this instead |
 |---|---|---|
 | Hand-wiring licensing into an empty project | Missed seam rules, wrong reference, divergent crypto | Scaffold step 1; the template did the wiring |
-| Referencing an installed connector DLL (`Reference` + `HintPath`) | Swappable external DLL, build needs the Hub — a retired historical path, never the migration source | Keep the Lite `PackageReference`; it compiles into your plugin |
+| Referencing an installed connector DLL | Swappable external DLL, and the build needs the Hub | Keep the Lite `PackageReference`; it compiles into your plugin |
 | Copying any connector DLL next to your plugin | Version skew, stale copies, fights the `never copy` rule family | Nothing to copy: Lite travels inside your payload automatically |
 | Creating your own ribbon tab | Two tabs fragment the ecosystem; the shared tab is canonical | Your panel inside the shared `Node.aec` tab |
 | Gating only some commands | Ungated path = free feature; fails review | Step 4 inventory; gate every command at entry |
