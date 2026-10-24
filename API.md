@@ -594,8 +594,8 @@ Notes:
 - License package: `NodeAec.Licensing.Lite`, `<Version>1.0.0-preview.1</Version>`
   (⇒ assembly version `1.0.0.0` under SDK defaults), `RootNamespace NodeAec.Licensing`,
   TFMs `net48;net8.0-windows;net10.0-windows`, release-signed (strong-name key via
-  secrets, never in the repo — local pre-release builds are unsigned) + Authenticode
-  at publish.
+  secrets, never in the repo — local pre-release builds are unsigned); no Authenticode
+  (see `revit-licensing-lite/docs/signing.md`).
   Pre-release it restores from the local folder feed (`NuGet.config` at the repo root
   → `../revit-licensing-lite/.../bin/Release`); at release (Wave 4) the local source
   is removed and the same `PackageReference` restores from NuGet.org (prefix
