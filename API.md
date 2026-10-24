@@ -83,7 +83,7 @@ public class HelloCommand : IExternalCommand          // real class: SamplePlugi
         if (!gate.IsLicensed)                         // ONLY branch point
         {
             TaskDialog.Show("Sample Plugin — License Required",
-                $"Reason reported by Node.aec:\n{gate.Message}");  // verbatim connector text
+                gate.Message);                        // verbatim: the reason and the next step
             NodeAecLicenseGate.OpenConnector();       // silent no-op if absent
             return Result.Cancelled;
         }
@@ -316,21 +316,20 @@ translate it inside code. Rows marked ⟶ are the cases the brief calls out expl
 
 Each failure is a distinct `Message` with no machine-readable code — never parse
 or match the text to decide behavior.
-Read the table to learn what users will see and what guidance to attach, not to
-build branches: your code has exactly one `if` on `IsLicensed`.
+Read the table to learn what users will see, not to build branches: your code has
+exactly one `if` on `IsLicensed`, and the message is the whole explanation — never add
+a generic list of possible causes around it.
 
 **How `HelloCommand` really handles this table — one path for every row.** It does *not*
 branch per row: any non-licensed outcome (a machine with no credentials looks exactly
 like a signed-out one — message #2 below) renders the **same** fail-closed `TaskDialog` (`BlockedTitle` = `Sample Plugin — License
 Required`) whose `MainInstruction` is `Sample Plugin requires an active Node.aec license.`,
-whose `MainContent` starts `Reason reported by Node.aec:\n{Message}` followed by fixed
-generic guidance bullets (sign in / renew / buy `'revit-sample-plugin'` / connector missing / seat
-limit / offline grace), with an `Open Node.aec Connector...` command link (→
+whose `MainContent` is `{Message}` verbatim, with an `Open Node.aec Connector...` command link (→
 `NodeAecLicenseGate.OpenConnector()` only on click) and `CommonButtons = Close`; the command
-then returns `Result.Cancelled`. The column below is therefore *message-implied* guidance —
-detail your own UI may surface — not a set of code branches.
+then returns `Result.Cancelled`. The column below explains each message for support and
+troubleshooting — it is not a set of code branches and not text to add to the dialog.
 
-| # | Verbatim `Message` | Situation ⟶ category | Handling & user guidance (sample: same blocked dialog + `Result.Cancelled` for every row) |
+| # | Verbatim `Message` | Situation ⟶ category | Handling (sample: same blocked dialog + `Result.Cancelled` for every row) |
 |---|---|---|---|
 | 1 | `Slug do produto não informado para validação.` | Caller passed null/whitespace slug — **programming error** | Fix the caller (your `ProductSlug` constant); cannot occur in normal operation (if it does, the sample still shows it verbatim in the blocked dialog + `Result.Cancelled`) |
 | 2 | `Nenhuma credencial do Node.aec encontrada nesta estação. Abra o Node.aec Connector na Ribbon para entrar com sua conta ou ativar sua licença.` | ⟶ **Not authenticated** (never logged in, logged out, lease file cleared) **AND ALSO the "Hub not installed / lease never written" case** — the gate only reads the file; it cannot distinguish "Hub absent" from "never authenticated", and there is no separate state for it (§3.1, §9) | Show `Message` in the blocked dialog; offer `Open Node.aec Connector...` → `OpenConnector()`; `Result.Cancelled` |
@@ -344,7 +343,7 @@ detail your own UI may surface — not a set of code branches.
 | 10 | ⟶ `A concessão de licenças foi emitida para outra estação de trabalho (Hardware ID divergente).` | **Machine mismatch** — lease bound to another PC | Cancel; user must activate/log in on this machine |
 | 11 | ⟶ `O prazo de tolerância offline expirou em {dd/MM/yyyy}. Conecte-se à internet para sincronizar.` | **Offline grace** (offline tolerance window, default 30 days) expired — `exp` in the past | Cancel; tell user to connect and sync (connector "Atualizar") |
 | 12 | `O prazo da licença local não pôde ser lido. Conecte-se à internet e clique em atualizar no Node.aec Connector.` | `exp` unreadable/out of plausible range | Cancel; go online → update |
-| 13 | ⟶ `O produto '{productSlug}' não consta nas licenças ativas desta conta. Adquira ou ative no catálogo Node.aec.` | **Missing entitlement** — account has no lease entry for this slug (wrong product, not purchased, or slug mismatch) | Blocked dialog + `Result.Cancelled`; the sample's guidance bullet calls out `'revit-sample-plugin'` — optionally add a catalog link via `ProductLinks.BuildProductUrl(slug)` |
+| 13 | ⟶ `O produto '{productSlug}' não consta nas licenças ativas desta conta. Adquira ou ative no catálogo Node.aec.` | **Missing entitlement** — account has no lease entry for this slug (wrong product, not purchased, or slug mismatch) | Blocked dialog + `Result.Cancelled`; the message already names the slug |
 | 14 | ⟶ `O limite de computadores simultâneos para '{Name}' foi atingido.` | **Seat limit** — entitlement `status == "seat_limit_reached"` | Cancel; user frees a seat in the web portal, then revalidates |
 | 15 | ⟶ `A licença ou período de teste de '{Name}' expirou em {dd/MM/yyyy}.` | **Expired license or trial** — `expiresAt` in the past. Note: there is **no trial claim** anywhere; "período de teste" is wording only — a trial is just an entitlement that expires | Cancel; user renews in the portal |
 | 16 | `A licença de '{Name}' está com status '{Status}'.` | Any other inactive status, or `granted:false`. **Quirk (verified):** if `granted` is `false` while `status` stays `"active"` and unexpired, the text reads `… está com status 'active'.` — confusing but verbatim | Show as-is in the blocked dialog (the status string is echoed verbatim); surface it to support if needed |
@@ -723,8 +722,7 @@ and the `Open Node.aec Connector...` command link that calls `OpenConnector()` o
 var gate = NodeAecLicenseGate.Validate();      // GateSnapshot — plugin-local, never throws
 if (!gate.IsLicensed)
 {
-    TaskDialog.Show("Sample Plugin — License Required",
-        $"Reason reported by Node.aec:\n{gate.Message}");
+    TaskDialog.Show("Sample Plugin — License Required", gate.Message);  // verbatim
     NodeAecLicenseGate.OpenConnector();
     return Result.Cancelled;
 }
@@ -745,7 +743,7 @@ stays package-only.
 
 **Q: Nothing happens when the user clicks my "open connector" link.**
 By contract `OpenConnector()` is a silent no-op when the connector UI cannot be reached
-(assembly absent, window open failure). Your own dialog must already carry the guidance —
+(assembly absent, window open failure). Your own dialog must already show `Message` —
 never rely on the window appearing.
 
 **Q: The user says "I have a license" but the command cancels with
@@ -915,7 +913,7 @@ public Result Execute(ExternalCommandData c, ref string msg, ElementSet set)
     var gate = NodeAecLicenseGate.Validate();   // 1st line — nothing before (no dialog, no Transaction)
     if (!gate.IsLicensed)
     {
-        ShowBlockedDialog(gate);                // Message verbatim + guidance + link OpenConnector
+        ShowBlockedDialog(gate);                // Message verbatim + link OpenConnector
         return Result.Cancelled;
     }
     ShowMyFeature(c);
@@ -953,7 +951,7 @@ root (`Addins\<year>\YourPlugin.addin`), relative `<Assembly>`
 | # | Case | Expected |
 |---|---|---|
 | 1 | Licensed (Hub installed, entitled session) | Greeting + `BuildLicenseBlock` block, `Result.Succeeded` |
-| 2 | Blocked (no session / wrong slug / expired / seat) | `Message` verbatim + guidance + link, `Result.Cancelled` |
+| 2 | Blocked (no session / wrong slug / expired / seat) | `Message` verbatim + link, `Result.Cancelled` |
 | 3 | No Hub (connector uninstalled/folder renamed) | Same blocked state (`Nenhuma credencial…`), silent no-op on the link, no crash, `Result.Cancelled` |
 | 4 | Reload 2× via Add-In Manager | One `Node.aec` tab, one button (no ghost tab) |
 

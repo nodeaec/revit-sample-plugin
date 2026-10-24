@@ -11,8 +11,8 @@ namespace SamplePlugin.Commands;
 /// command is <b>never</b> executed unlicensed (fail closed).
 /// <para>Licensed → greets the user and shows the real license fields verified locally.
 /// Not licensed / unknown state / any exception → the failure
-/// <c>Message</c> verbatim plus short guidance and a link that opens the
-/// Node.aec Connector, then <see cref="Result.Cancelled"/>.
+/// <c>Message</c> verbatim and a link that opens the Node.aec Connector, then
+/// <see cref="Result.Cancelled"/>.
 /// </para>
 /// </summary>
 [Transaction(TransactionMode.Manual)]
@@ -55,7 +55,7 @@ public class HelloCommand : IExternalCommand
                 return ShowFailClosed();
             }
 
-            // 2) Not licensed → reason verbatim + guidance + action, then stop.
+            // 2) Not licensed → reason verbatim + open-connector link, then stop.
             if (!gate.IsLicensed)
             {
                 ShowBlockedDialog(gate);
@@ -102,26 +102,21 @@ public class HelloCommand : IExternalCommand
     }
 
     /// <summary>
-    /// Builds and shows the "not licensed" dialog: the failure
-    /// <c>Message</c> verbatim as the reason, short guidance covering the
-    /// known situations, and a command link that opens the connector UI
+    /// Builds and shows the "not licensed" dialog: the failure <c>Message</c> verbatim
+    /// and a command link that opens the connector UI
     /// (<c>NodeAecLicenseGate.OpenConnector()</c>).
+    /// <para>
+    /// <c>Message</c> already names the one specific reason and the next step, so it is
+    /// the whole content. Do not add a generic list of possible causes: the user cannot
+    /// tell which one applies, and the real reason gets buried.
+    /// </para>
     /// </summary>
     private static void ShowBlockedDialog(GateSnapshot gate)
     {
         var dialog = new TaskDialog(BlockedTitle)
         {
             MainInstruction = "Sample Plugin requires an active Node.aec license.",
-            MainContent =
-                $"Reason reported by Node.aec:\n{gate.Message}\n\n" +
-                "What the situation usually means:\n" +
-                "- Sign in: open the Node.aec Connector and sign in (or activate your license key).\n" +
-                "- License expired: renew it from your Node.aec account.\n" +
-                $"- No license for this plugin: buy or activate '{NodeAecLicenseGate.ProductSlug}' in the Node.aec catalog.\n" +
-                "- Connector not installed or not reachable: install/open the Node.aec Connector and retry.\n" +
-                "- Seat limit reached: free a seat for this product in your Node.aec account.\n" +
-                "- Offline grace period over: go online and let the connector synchronize.\n\n" +
-                "This command stays closed until a valid license is verified (fail closed).",
+            MainContent = gate.Message,
             CommonButtons = TaskDialogCommonButtons.Close
         };
 

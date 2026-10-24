@@ -91,8 +91,8 @@ full trail in API.md §13 *Migrating an existing plugin to Lite*.
    `Message` — payload fields are `null` on failure. Render them with
    `NodeAecLicenseGate.BuildLicenseBlock(gate)` (treat `ExpiresAt == null` as
    "no expiry recorded (perpetual)", never as expired). Failure UX: show the
-   gate's `Message` **verbatim** + short English guidance bullets (sign in /
-   renew / buy your slug / no credentials / seat limit / offline grace) + an
+   gate's `Message` **verbatim** as the whole dialog content (it already names
+   the one reason and the next step — never add a generic list of causes) + an
    `Open Node.aec Connector...` command link calling
    `NodeAecLicenseGate.OpenConnector()` on click, then `Result.Cancelled`.
    Never translate, string-match, or branch on `Message` — `IsLicensed` is the

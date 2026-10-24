@@ -77,7 +77,7 @@ public Result Execute(ExternalCommandData commandData, ref string message, Eleme
         if (gate is null) return ShowFailClosed();   // unknown state ⇒ fail closed
         if (!gate.IsLicensed)
         {
-            ShowBlockedDialog(gate);                 // Message verbatim + guidance + link
+            ShowBlockedDialog(gate);                 // Message verbatim + link
             return Result.Cancelled;
         }
 
@@ -92,10 +92,9 @@ public Result Execute(ExternalCommandData commandData, ref string message, Eleme
 ```
 Source: [HelloCommand.cs:L36-L80](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/Commands/HelloCommand.cs#L36-L80) (blocked dialog at [L110-L134](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/Commands/HelloCommand.cs#L110-L134)).
 
-`ShowBlockedDialog` builds a `TaskDialog` whose `MainContent` starts with
-`Reason reported by Node.aec:\n{gate.Message}`, adds fixed guidance bullets
-(sign in / renew / buy `'revit-sample-plugin'` / Hub missing / seat limit /
-offline grace), adds `AddCommandLink(... "Open Node.aec Connector...")` calling
+`ShowBlockedDialog` builds a `TaskDialog` whose `MainContent` is `gate.Message`
+verbatim (it already names the one reason and the next step — no generic list
+of causes), adds `AddCommandLink(... "Open Node.aec Connector...")` calling
 `NodeAecLicenseGate.OpenConnector()` only on click, and the command then
 returns `Result.Cancelled`. There is no code path past the gate without a
 license.

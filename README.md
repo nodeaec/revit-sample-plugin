@@ -43,7 +43,7 @@ Click Hello World
           Ed25519 signature offline against the compiled TrustedAnchors,
           no network
             -> licensed:    greeting + license card, Result.Succeeded
-            -> not licensed: reason + guidance + open-connector action, Result.Cancelled
+            -> not licensed: reason (verbatim) + open-connector link, Result.Cancelled
 ```
 
 The gate returns a snapshot with six members (`IsLicensed`, `LicenseType`, `LicenseKey`, `ProductName`, `ExpiresAt`, `Message`). Commands branch only on `IsLicensed` and show `Message` verbatim (PT-BR, as-is); the remaining members are display-only (`null` on failure).
@@ -151,7 +151,7 @@ catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ArgumentException || 
 { /* already exists — normal */ }
 ```
 
-**7. Present failures with guidance.** Display the gate message verbatim (Portuguese, as-is — never translate it in code), add a brief note on what to do next, and offer the action that opens the connector. Note that `OpenConnector()` is a silent no-op when the connector UI is unreachable, so the dialog itself must contain the guidance. Details: [API.md §5 — Status / reason taxonomy](API.md#5-status--reason-taxonomy)
+**7. Show the reason, then offer the Connector.** Display the gate message verbatim (Portuguese, as-is — never translate it in code). It already says what went wrong and what to do, so don't add a list of possible causes around it. Offer a link that opens the connector; `OpenConnector()` is a silent no-op when the connector is not installed, so always show the dialog first. Details: [API.md §5 — Status / reason taxonomy](API.md#5-status--reason-taxonomy)
 
 ```csharp
 dialog.AddCommandLink(TaskDialogCommandLinkId.CommandLink1, "Open Node.aec Connector...");

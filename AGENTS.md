@@ -71,7 +71,7 @@ security boundary.
 | G6 | **The upstream connector repo is READ-ONLY.** | `../revit-connector` (github.com/nodeaec/revit-connector): never write, never "fix" it from this repo's sessions (§10). |
 | G7 | **Code wins over docs — and code changes update docs in the SAME change.** | Any change to `src/SamplePlugin/*` updates `API.md` **and** `.agents/skills/nodeaec-connector-integration/SKILL.md` **and** `README.md` together (table in §9, migration docs in `API.md` §§13–14 included). Never land a code-only or doc-only behavioral change. |
 | G8 | **Never swallow an exception into "licensed".** | Catches may fail closed (blocked dialog + `Result.Cancelled`) or degrade (`OpenConnector()` → silent no-op). A `catch` that proceeds with the feature, or that returns `Result.Succeeded` on an unknown state, is forbidden. |
-| G9 | **Connector Portuguese strings are verbatim.** | Show `GateResult.Message` as-is; never translate, re-word, or trim it in code branches. English guidance is *added* around it, not substituted for it (`API.md` §5). |
+| G9 | **Connector Portuguese strings are verbatim — and they are the whole message.** | Show `GateResult.Message` as-is; never translate, re-word, or trim it. It already names the one specific reason and the next step, so it is the dialog's content: never surround it with a generic list of possible causes (the user cannot tell which applies and the real reason gets buried) (`API.md` §5). |
 
 ---
 
@@ -90,7 +90,7 @@ Use these exact values and names everywhere — docs, code, dialogs, commits. Ne
 | Packaging | `SamplePlugin.addin` at the `Addins\<year>\` **root**, relative `<Assembly>` `SamplePlugin\SamplePlugin.dll` → `Addins\<year>\SamplePlugin\SamplePlugin.dll` |
 | Build | SDK-style csproj; `-p:RevitYear=2023..2027` → `net48` / `net8.0-windows` / `net10.0-windows` (default `2026`); `NodeAec.Licensing.Lite` via NuGet restore |
 | `Snapshot` members (exactly six) | `IsLicensed`, `LicenseType`, `LicenseKey`, `ProductName`, `ExpiresAt`, `Message` — payload fields `null` on failure; **only** branch point is `IsLicensed` |
-| Failure UX | Gate `Message` verbatim + short guidance + `NodeAecLicenseGate.OpenConnector()` action + `Result.Cancelled` (fail-closed, never proceed unlicensed) |
+| Failure UX | Gate `Message` verbatim as the dialog content + `NodeAecLicenseGate.OpenConnector()` command link + `Result.Cancelled` (fail-closed, never proceed unlicensed) |
 | Command class | `SamplePlugin.Commands.HelloCommand` |
 | Seam | `SamplePlugin.Licensing.NodeAecLicenseGate.Validate()` → `GateSnapshot`; `NodeAecLicenseGate.OpenConnector()`; `NodeAecLicenseGate.BuildLicenseBlock(GateSnapshot)` — backed by `NodeAec.Licensing.Gate.Validate` (`API.md` §§13–14) |
 
@@ -220,7 +220,7 @@ Cross-reference `API.md` **by these section titles** (they are stable):
 Contract in one paragraph: add the `NodeAec.Licensing.Lite` package (never
 copy the Hub DLL — Lite compiles in and travels with your payload), put the single slug constant in `NodeAecLicenseGate`, call `Validate()` at the
 entry of every command, branch only on `IsLicensed`, render `Message` verbatim with
-guidance + `OpenConnector()` + `Result.Cancelled` on failure, add panel `Sample Plugin`
+an `OpenConnector()` link + `Result.Cancelled` on failure, add panel `Sample Plugin`
 with button `Hello World` to the shared `Node.aec` tab using the local idempotent
 replica + AdWindows hooks, ship the manifest at `Addins\<year>\` root with a relative
 `Assembly`, and build the `RevitYear` matrix.
@@ -244,7 +244,7 @@ Checklist (order matters):
    `IExternalApplication`, ribbon `PanelName`/`ButtonId`/`ButtonText` (keep the shared
    `Node.aec` tab), tooltips and dialog titles.
 4. **Gate every command:** `NodeAecLicenseGate.Validate()` first statement; branch only
-   on `IsLicensed`; failure UX = `Message` verbatim + guidance + `OpenConnector()` +
+   on `IsLicensed`; failure UX = `Message` verbatim + `OpenConnector()` link +
    `Result.Cancelled`. No exceptions swallowed into the licensed path.
 5. **Ribbon:** keep the local idempotent replica + AdWindows hooks pattern; treat the
    connector's `DeduplicateRibbonTabs`/`CleanRogueRibbonElements` as OPTIONAL (JIT-load
@@ -347,11 +347,11 @@ Upstream: **https://github.com/nodeaec/revit-connector**, local read-only checko
 - ❌ Do not write to `../revit-connector`, or to anything outside this repo root (G6).
 - ❌ Do not land a code change without updating `API.md` + skill + `README.md` where §9
   requires it, and vice versa (G7).
-- ❌ Do not translate, trim, or re-word connector `Message` strings; do not show them as
-  the *only* content — add the short guidance, the `OpenConnector()` action, and return
-  `Result.Cancelled` (G9, §4).
+- ❌ Do not translate, trim, or re-word connector `Message` strings, and do not wrap them
+  in a generic list of possible causes — show the message, offer the `OpenConnector()`
+  link, and return `Result.Cancelled` (G9, §4).
 - ❌ Do not call `NodeAecLicenseGate.OpenConnector()` and depend on the window appearing
-  (silent no-op by contract) — your dialog must already carry the guidance.
+  (silent no-op by contract) — show the dialog with `Message` first.
 - ❌ Do not put `NodeAec.Licensing` types in command signatures, fields, or expressions
   outside `Licensing/NodeAecLicenseGate.cs`.
 - ❌ Do not treat a restore failure (`NU1101`) as a missing Hub and "fix" it with a
