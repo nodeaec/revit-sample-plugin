@@ -33,10 +33,10 @@
 ; NOTE: this file must stay plain ASCII (ISCC reads scripts as ANSI/UTF-8-BOM).
 
 #ifndef AppVersion
-  #define AppVersion "0.1"
+  #error AppVersion is required: compile with /DAppVersion=0.1.0 (same as <Version> in the plugin csproj; release.ps1 passes it).
 #endif
 #ifndef AppVersionNum
-  #define AppVersionNum "0.1.0"
+  #error AppVersionNum is required: compile with /DAppVersionNum=0.1.0 (numeric x.y.z form of AppVersion).
 #endif
 #ifndef RevitYears
   #error RevitYears is required: compile with /DRevitYears=2023,2024 (the compatible Revit years of this build).

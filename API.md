@@ -823,9 +823,9 @@ maintenance burden, divergent versions). Exactly one integration path is authori
 
 - **Gate surface verified against `NodeAec.Licensing.Lite 0.3.0`** — every
   `Gate`/`Snapshot`/`GateReason` identifier, signature and verbatim message above was
-  checked against the Lite source. The `NodeAec.Templates.RevitPlugin` template (0.1.0)
-  still generates the older `Licensing/NodeAecLicenseGate.cs` wrapper and pins a Lite
-  version that is not on NuGet.org; this sample is the current shape.
+  checked against the Lite source. The `NodeAec.Templates.RevitPlugin` template 0.2.0
+  generates this same shape (0.1.0 generated an older wrapper class, pinned a Lite version
+  that is not on NuGet.org, and wrote a `.addin` with invalid XML).
 - **Hub behavior verified against revit-connector@7366482** — the Hub-side facts
   retained in this document (SSO/lease-sync ownership, Hub log path, `OpenConnector`
   reflection target, shared-tab ownership) were checked against the connector source

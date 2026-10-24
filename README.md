@@ -4,9 +4,10 @@ One Revit button that demonstrates how to sell through the Node.aec platform: wi
 
 This README takes about five minutes. It explains what the sample does, how to run it, and how to apply the same pattern to your own plugin. The license check is a fail-closed gate — `Gate.Validate(ProductSlug)` is the first statement of `IExternalCommand.Execute` — and the license package is a NuGet `PackageReference` to `NodeAec.Licensing.Lite`.
 
-> **Status:** the `src/` code uses `NodeAec.Licensing.Lite` 0.3.0 from NuGet.org.
-> The `dotnet new nodeaec-revit-plugin` template (0.1.0) still generates the older
-> layout with a `Licensing/NodeAecLicenseGate.cs` wrapper; this sample no longer has it.
+> **Status:** the `src/` code uses `NodeAec.Licensing.Lite` 0.3.0 from NuGet.org, and
+> `dotnet new nodeaec-revit-plugin` (template 0.2.0 or later) generates the same shape.
+> Template 0.1.0 generated an older wrapper class and a manifest with invalid XML: update
+> with `dotnet new install NodeAec.Templates.RevitPlugin --force`.
 
 ## Contents
 
@@ -68,14 +69,14 @@ Prerequisites (install once):
 dotnet new install NodeAec.Templates.RevitPlugin
 ```
 
-**2. Scaffold your plugin.** One command produces a working project with no manual wiring. `-n` is the plugin/assembly name; `-p ProductSlug=` is your catalog slug (the template's `--ProductSlug` parameter):
+**2. Scaffold your plugin.** One command produces a working project with no manual wiring. `-n` is the plugin/assembly name; `--ProductSlug` is your catalog slug (the template's `--ProductSlug` parameter):
 
 ```bash
-dotnet new nodeaec-revit-plugin -n MyPlugin -p ProductSlug=my-plugin
+dotnet new nodeaec-revit-plugin -n MyPlugin --ProductSlug my-plugin
 cd MyPlugin
 ```
 
-(This repo is the template's output for `-n SamplePlugin -p ProductSlug=revit-sample-plugin`, plus the sample's demo content.)
+(This repo is the template's output for `-n SamplePlugin --ProductSlug revit-sample-plugin`, plus the sample's demo content.)
 
 **3. Build.** No connector install needed — the license package restores from NuGet.org. `RevitYear` is an MSBuild property selecting the Revit year; each year maps to a target framework (TFM):
 
@@ -98,7 +99,7 @@ Details: [API.md §8 — Versioning & compatibility matrix](API.md#8-versioning-
 %ProgramData%\Autodesk\Revit\Addins\<year>\MyPlugin\MyPlugin.dll
 ```
 
-Or run the group installer (`release/MyPlugin-0.1-R<group>-Setup.exe`, produced by `scripts/release.ps1` — one Setup per Revit compatibility group `2023-2024` / `2025-2026` / `2027`; the wizard lists the group's installed Revit versions).
+Or run the group installer (`release/MyPlugin-0.1.0-R<group>-Setup.exe`, produced by `scripts/release.ps1` — one Setup per Revit compatibility group `2023-2024` / `2025-2026` / `2027`; the wizard lists the group's installed Revit versions).
 
 The license assembly travels *inside* your payload automatically — nothing extra to deploy. Do not ship `RevitAPI*.dll` alongside your plugin.
 
@@ -115,7 +116,7 @@ The template already did the wiring — what remains is your product identity an
 // App.cs (the Ribbon) has no licensing calls.
 ```
 
-**2. Confirm your product slug.** The scaffold sets it (`-p ProductSlug=`); it becomes the `ProductSlug` constant in `HelloCommand` (the sample uses [`revit-sample-plugin`](https://nodeaec.com.br/products/revit-sample-plugin)). Matching is trim + case-insensitive. Details: [API.md §4 — Public integration surface](API.md#4-public-integration-surface)
+**2. Confirm your product slug.** The scaffold sets it (`--ProductSlug`); it becomes the `ProductSlug` constant in `HelloCommand` (the sample uses [`revit-sample-plugin`](https://nodeaec.com.br/products/revit-sample-plugin)). Matching is trim + case-insensitive. Details: [API.md §4 — Public integration surface](API.md#4-public-integration-surface)
 
 ```csharp
 public const string ProductSlug = "revit-sample-plugin"; // replace with your slug
@@ -201,7 +202,7 @@ Confirm before writing code — stop and ask if anything is unresolved:
   - Which commands need gating (answer: all of them)
   - Whether the test machine has the connector installed with an entitled session (needed only for the licensed run, never for the build)
 
-Then: scaffold with dotnet new nodeaec-revit-plugin -n <Name> -p ProductSlug=<slug>
+Then: scaffold with dotnet new nodeaec-revit-plugin -n <Name> --ProductSlug <slug>
 (API.md §3); set the ProductSlug constant; call Gate.Validate(ProductSlug) first in
 every command and branch only on IsLicensed, with the blocked dialog showing
 gate.GetMessage(language) + Gate.OpenConnector() + Cancelled (API.md §2, §5, §7, §9); place my panel under the shared Node.aec tab

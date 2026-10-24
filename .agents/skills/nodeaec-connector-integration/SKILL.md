@@ -16,8 +16,8 @@ description: >-
 
 New-plugin path: scaffold from the template, set the slug, gate every command.
 Worked example: this repository's `src/SamplePlugin/` (canonical names:
-`SamplePlugin.Commands.HelloCommand`). The template (0.1.0) still generates an older
-`Licensing/NodeAecLicenseGate.cs` wrapper; follow this sample instead and call `Gate.Validate` directly. Deep detail
+`SamplePlugin.Commands.HelloCommand`) — the shape template 0.2.0+ generates. Template 0.1.0
+generated an older wrapper and an invalid `.addin`; reinstall with `--force` if you have it. Deep detail
 lives in [`references/`](references/) — read them when a step says so.
 
 ## 1. When to use
@@ -51,12 +51,12 @@ full trail in API.md §13 *Migrating an existing plugin to Lite*.
 
    ```bash
    dotnet new install NodeAec.Templates.RevitPlugin   # once per machine
-   dotnet new nodeaec-revit-plugin -n MyPlugin -p ProductSlug=my-plugin
+   dotnet new nodeaec-revit-plugin -n MyPlugin --ProductSlug my-plugin
    ```
 
    You get `App.cs` (shared-tab ribbon, zero licensing calls),
-   `Commands/HelloCommand.cs` (gate-first command), a `Licensing/NodeAecLicenseGate.cs`
-   wrapper (delete it and call `Gate.Validate` directly, as this sample does), a relative-`<Assembly>` `.addin` manifest, a `RevitYear`-matrix
+   `Commands/HelloCommand.cs` (gate-first command, holds `ProductSlug`), a relative-`<Assembly>` `.addin` manifest
+   with a fresh `AddInId`, a `RevitYear`-matrix
    csproj with the Lite `PackageReference`, and `scripts/release.ps1` per group.
    *Decision point:* never start from an empty csproj and hand-wire licensing.
 
@@ -67,7 +67,7 @@ full trail in API.md §13 *Migrating an existing plugin to Lite*.
 
 3. **Keep the package reference — it is the whole dependency** (API.md §3 *The
    integration path (authoritative)*). The scaffold already declares exactly one
-   `<PackageReference Include="NodeAec.Licensing.Lite" Version="0.3.0">` (the template pins a version that is not on NuGet.org — set 0.3.0 or later)
+   `<PackageReference Include="NodeAec.Licensing.Lite" Version="0.3.0">`
    — resolved from NuGet, compiled into your plugin. Never add a `Reference` to an
    installed connector DLL, never a `ProjectReference`,
    **never copy a connector DLL next to your plugin**. Ship your `.addin` at the
@@ -146,7 +146,7 @@ full trail in API.md §13 *Migrating an existing plugin to Lite*.
 
 | Sample (this repo) | Your plugin |
 |---|---|
-| `ProductSlug = "revit-sample-plugin"` | Your registered catalog slug — the **one** constant to change (set via `-p ProductSlug=` at scaffold) |
+| `ProductSlug = "revit-sample-plugin"` | Your registered catalog slug — the **one** constant to change (set via `--ProductSlug` at scaffold) |
 | Namespace `SamplePlugin.*` / assembly `SamplePlugin` | Your `-n` name (root namespace / assembly name) |
 | Panel `Sample Plugin` | Your panel name inside the shared `Node.aec` tab |
 | Button `Hello World`, id `SamplePlugin_HelloWorld` | Your button text and unique id |

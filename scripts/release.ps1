@@ -23,11 +23,13 @@
   resolves to that group and logs a notice.
 
 .EXAMPLE
-  powershell -ExecutionPolicy Bypass -File scripts/release.ps1 -Version 0.1 -RevitYear 2025-2026
-  powershell -ExecutionPolicy Bypass -File scripts/release.ps1 -Version 0.1 -RevitYear 2023-2024 -Install
+  powershell -ExecutionPolicy Bypass -File scripts/release.ps1 -Version 0.2.0 -RevitYear 2025-2026
+  powershell -ExecutionPolicy Bypass -File scripts/release.ps1 -Version 0.2.0 -RevitYear 2023-2024 -Install
+
+  -Version has no default and must equal <Version> in SamplePlugin.csproj.
 #>
 param(
-  [string]$Version = "0.1",
+  [string]$Version,
   [string]$RevitYear = "2025-2026",
   [string]$Configuration = "Release",
   # Inno Setup AppId shared by every year (user-supplied identity).
@@ -41,8 +43,11 @@ $ErrorActionPreference = "Stop"
 if ($args.Count -gt 0) {
   throw "Unrecognized arguments: $($args -join ' '). Use -RevitYear <group> (e.g. -RevitYear 2023-2024)."
 }
+if ([string]::IsNullOrWhiteSpace($Version)) {
+  throw "-Version is required (e.g. -Version 0.2.0). Use the same value as <Version> in src\SamplePlugin\SamplePlugin.csproj."
+}
 if ($Version -notmatch '^\d+\.\d+(\.\d+){0,2}([.-][0-9A-Za-z]+)*$') {
-  throw "Invalid version: '$Version'. Use SemVer (e.g. 0.1) and pass the group with -RevitYear <group>."
+  throw "Invalid version: '$Version'. Use SemVer (e.g. 0.2.0) and pass the group with -RevitYear <group>."
 }
 
 # One installer per Revit compatibility group. The group defines the years the
@@ -94,6 +99,15 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($TargetFramework)) {
 }
 $OutDir = Join-Path $RepoRoot "src\SamplePlugin\bin\$BuildYear\$Configuration\$TargetFramework"
 
+$ProjectVersion = (& dotnet msbuild $Project -getProperty:Version -p:RevitYear=$BuildYear -nologo -v:quiet |
+  Select-Object -Last 1).ToString().Trim()
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($ProjectVersion)) {
+  throw "Could not read <Version> from $Project (exit $LASTEXITCODE)."
+}
+if ($Version -ne $ProjectVersion) {
+  throw "-Version $Version differs from <Version>$ProjectVersion</Version> in SamplePlugin.csproj. Update the csproj or pass -Version $ProjectVersion."
+}
+
 if (-not $SkipBuild) {
   $buildArgs = @("build", $Project, "-c", $Configuration, "-p:RevitYear=$BuildYear")
   Write-Host "==> dotnet $($buildArgs -join ' ') ($TargetFramework)"
@@ -117,6 +131,13 @@ Get-ChildItem $OutDir -Filter *.deps.json -ErrorAction SilentlyContinue |
   Copy-Item -Destination $StageDir -Force
 if (Test-Path (Join-Path $RepoRoot "README.md")) {
   Copy-Item (Join-Path $RepoRoot "README.md") (Join-Path $StageDir "README.md") -Force
+}
+# Without the license package the plugin loads, but every command fails with a
+# FileNotFoundException instead of the license dialog.
+foreach ($required in @("NodeAec.Licensing.Lite.dll", "BouncyCastle.Cryptography.dll")) {
+  if (-not (Test-Path (Join-Path $StageDir $required))) {
+    throw "Missing licensing dependency in build output: $required was not copied to $OutDir."
+  }
 }
 
 # Stage the .addin with the absolute Assembly path for the BUILD year. This
