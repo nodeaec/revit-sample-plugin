@@ -226,7 +226,7 @@ Source: package `NodeAec.Licensing.Lite 1.0.0-preview.1` (`src/NodeAec.Licensing
 | **Never throws** | Guaranteed: everything after the initial lease read is wrapped in a top-level `catch` that returns `Snapshot.Failure("Não foi possível verificar a licença local. Abra o Node.aec Connector para ressincronizar.")`. The pre-try part's only I/O call, `LeaseStorage.LoadMasterLease()`, swallows its own exceptions and returns `null`. (Bounded, as always, by catastrophic CLR failures. There is no assembly-missing case: Lite is compiled into your plugin, so `Gate.Validate` always runs — §3.1.) |
 | **Network** | **Zero network calls.** Every call does local disk I/O (`entitlements.lease` read + DPAPI unprotect), base64/JWT parse, Ed25519 verify against the compiled `TrustedAnchors[]` and an in-memory entitlement scan. Treat each call as inexpensive disk I/O, and call it **once per command**, not in per-element loops. |
 | **Revit API** | None — no `Document`, no `UIApplication`. Filesystem/DPAPI/crypto only. |
-| **Environment overrides** | **None — by design.** Unlike the Hub, Lite ignores `NODEAEC_LICENSE_PUBLIC_KEY_SPKI`: the only accepted keys are the compiled `TrustedAnchors[]` (current + next, supporting N/N+1 rotation). No env var, config file, or registry key can change the trust anchor. |
+| **Environment overrides** | **None — by design.** Lite ignores `NODEAEC_LICENSE_PUBLIC_KEY_SPKI` (production Connector builds ignore it too): the only accepted keys are the compiled `TrustedAnchors[]` (current + next, supporting N/N+1 rotation). No env var, config file, or registry key can change the trust anchor. |
 | **Verification order** | Ed25519 signature → `iss` (`"node-aec"`) → `scope` (`"master-lease"`) → `aud` (`node-aec-desktop`/`node-aec-plugin`) → `iat` (≤ now+300 s) → machine id (`mid`) → offline `exp` → entitlement `slug` → entitlement activity. |
 
 ### 4.2 `Snapshot` — every member
@@ -303,7 +303,7 @@ the Lite package (`NodeAec.Licensing.*`) and travel with your plugin.
 | `NodeAec.Licensing.Models.EntitlementItem` | `Slug`, `Name`, `LicenseKey`, `Type`, `Status`, `Granted`, `ExpiresAt`, `MaxActivations`, `ActiveActivations`, `bool IsActive()` | `IsActive()` = `Granted && Status=="active" && (no expiry or not past)`; seat fields never reach `Snapshot` |
 | `NodeAec.Licensing.Storage.LeaseStorage` | `LoadMasterLease()`, `GetLeaseFilePath()`, `GetBaseDirectory()`, `SetCustomBasePath()` (test hook) | `ParseJwtPayload(string)` is explicitly **display-only, signature NOT verified** — license decisions go through `Gate.Validate`, always |
 | `NodeAec.Licensing.Hardware.HardwareId` | `static bool TryGetMachineId(out string machineId, out string? reason)` | Machine fingerprint; treat as sensitive |
-| `NodeAec.Licensing.Cryptography.LeaseSignatureVerifier` | `TryVerify(string?, out string? reason)`, `TrustedAnchors[]`, `AcceptedAlgorithm = "EdDSA"` | Anchor-only mode: no env override accepted; redundant if you call `Validate` |
+| `NodeAec.Licensing.Cryptography.LeaseSignatureVerifier` | `TryVerify(string?, out string? reason)`, `AcceptedAlgorithm = "EdDSA"` | Anchor-only mode: no env override accepted; redundant if you call `Validate`. `TrustedAnchors` is private since 0.2.0 (a public array let any add-in replace an anchor) |
 
 ---
 

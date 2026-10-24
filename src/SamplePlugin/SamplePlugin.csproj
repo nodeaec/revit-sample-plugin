@@ -95,7 +95,7 @@
     <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI" Version="$(RevitApiPkgVersion)" PrivateAssets="all" ExcludeAssets="runtime" />
     <PackageReference Include="Nice3point.Revit.Api.AdWindows" Version="$(RevitApiPkgVersion)" PrivateAssets="all" ExcludeAssets="runtime" />
     <!-- Offline license verification, compiled into this plugin. No HintPath: resolved from NuGet like any npm dependency. -->
-    <PackageReference Include="NodeAec.Licensing.Lite" Version="0.1.0" />
+    <PackageReference Include="NodeAec.Licensing.Lite" Version="0.2.0" />
   </ItemGroup>
 
   <ItemGroup>
