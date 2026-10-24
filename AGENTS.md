@@ -22,13 +22,13 @@ by coding agents**, then copied/adapted into real commercial plugins.
 
 **The invariant that outranks everything else: licensing is FAIL-CLOSED.**
 
-- `SamplePlugin.Commands.HelloCommand` calls `SamplePlugin.Licensing.NodeAecLicenseGate.Validate()`
+- `SamplePlugin.Commands.HelloCommand` calls `Gate.Validate(ProductSlug)` (`NodeAec.Licensing`)
   as its **first statement**; nothing in a command executes without a verified license.
 - Every non-licensed, unknown, or exceptional outcome ends in the blocked dialog and
   `Result.Cancelled`. There is no code path past the gate without a license.
 - "Cannot reach the gate" (no lease, Hub absent, exception anywhere)
   is **denied**, never allowed. A machine without credentials must behave
-  exactly like an unlicensed machine: fail-closed `GateSnapshot`, plugin-owned dialog,
+  exactly like an unlicensed machine: a denied `Snapshot`, plugin-owned dialog,
   `Result.Cancelled`. A machine without the Hub simply has no lease — the same
   ordinary failure.
 
@@ -45,8 +45,7 @@ security boundary.
 |---|---|
 | `src/SamplePlugin/SamplePlugin.csproj` | SDK-style project: Revit-year matrix, the `NodeAec.Licensing.Lite` `PackageReference`, per-year `bin\`/`obj\` isolation. Header comment documents the build commands — keep it in sync with reality. ([source](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/SamplePlugin.csproj)) |
 | `src/SamplePlugin/App.cs` | `IExternalApplication`. Builds the shared ribbon: `Node.aec` tab (defensive create), panel `Sample Plugin`, button `Hello World`, local tab-dedup replica + AdWindows hooks. **Contains zero Node.aec Connector API calls** — by design. ([source](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/App.cs)) |
-| `src/SamplePlugin/Commands/HelloCommand.cs` | `SamplePlugin.Commands.HelloCommand`. The canonical command shape: gate first, fail-closed dialog + `Result.Cancelled`, licensed greeting with `NodeAecLicenseGate.BuildLicenseBlock(gate)`. ([source](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/Commands/HelloCommand.cs)) |
-| `src/SamplePlugin/Licensing/NodeAecLicenseGate.cs` | **The integration seam.** `NodeAecLicenseGate.Validate()` → `GateSnapshot`, `NodeAecLicenseGate.OpenConnector()`, `NodeAecLicenseGate.BuildLicenseBlock(GateSnapshot)`, the `ProductSlug` constant, and the `GateSnapshot` type. The ONLY file in this repo allowed to reference `NodeAec.Licensing` types. ([source](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/Licensing/NodeAecLicenseGate.cs)) |
+| `src/SamplePlugin/Commands/HelloCommand.cs` | `SamplePlugin.Commands.HelloCommand`. **The whole integration**: the `ProductSlug` constant, `Gate.Validate(ProductSlug)` as the first statement, the blocked dialog (`gate.GetMessage(language)` + `Gate.OpenConnector()` link + `Result.Cancelled`), and the licensed greeting. ([source](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/Commands/HelloCommand.cs)) |
 | `src/SamplePlugin/SamplePlugin.addin` | Revit manifest. Deployed to `%ProgramData%\Autodesk\Revit\Addins\<year>\SamplePlugin.addin` with `<Assembly>SamplePlugin\SamplePlugin.dll`. ([source](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/SamplePlugin.addin)) |
 | `scripts/release.ps1` | Release pipeline (mirrors the connector's): build → stage → zip + sha256 per compatibility group (`-RevitYear` accepts `2023-2024` / `2025-2026` / `2027` or a single year), optional Inno Setup .exe via `installer.iss`. Invoke per group: `powershell -ExecutionPolicy Bypass -File scripts/release.ps1 -Version 0.1 -RevitYear 2025-2026`. |
 | `scripts/installer.iss` (+ `installer-after*.txt`) | Inno Setup 6 script: one Setup.exe per Revit compatibility group, shared `AppId` (user-supplied), a Revit-version dropdown in the wizard (install and uninstall; only shown when there is a choice), per-year manifest generated in `[Code]`. Compiled by `release.ps1` when ISCC.exe is present. |
@@ -54,7 +53,7 @@ security boundary.
 | `API.md` | The integration contract: connector surface, message taxonomy, ribbon/threading/build rules. Verified against revit-connector@7366482. Section titles are stable — cross-reference them by title. |
 | `README.md` | Human-facing overview and onboarding guide. |
 | `LICENSE` | MIT. |
-| `.agents/skills/nodeaec-connector-integration/SKILL.md` | This project's skill: the actionable adaptation workflow (see §11). Progressive disclosure: `SKILL.md` stays concise, depth lives in `references/licensing-seam.md` (seam walkthrough) and `references/validation.md` (build + manual test script). |
+| `.agents/skills/nodeaec-connector-integration/SKILL.md` | This project's skill: the actionable adaptation workflow (see §11). Progressive disclosure: `SKILL.md` stays concise, depth lives in `references/licensing-gate.md` (gate walkthrough) and `references/validation.md` (build + manual test script). |
 | `../revit-connector/` | **Outside the repo, READ-ONLY upstream** (see §10). |
 
 ---
@@ -63,15 +62,15 @@ security boundary.
 
 | # | Rule | Why / mechanics |
 |---|---|---|
-| G1 | **Validate at the entry of EVERY command.** | `NodeAecLicenseGate.Validate()` is the first statement of each `IExternalCommand.Execute`. One call per execution — it does disk I/O; never in per-element loops or `DynamicUpdaters` (`API.md` §7 "Threading & Revit API-context rules"). |
-| G2 | **Branch ONLY on the license boolean** (`GateSnapshot.IsLicensed`, backed by `GateResult.IsLicensed`). | Never string-match `Message`, never switch on a status — no enum/status code exists (`API.md` §5 "Status / reason taxonomy"). `LicenseType`/`LicenseKey`/`ProductName`/`ExpiresAt` are display-only and `null` on failure. |
+| G1 | **Validate at the entry of EVERY command.** | `Gate.Validate(ProductSlug)` is the first statement of each `IExternalCommand.Execute`. One call per execution — it does disk I/O; never in per-element loops or `DynamicUpdaters` (`API.md` §7 "Threading & Revit API-context rules"). |
+| G2 | **Decide ONLY on the license boolean** (`Snapshot.IsLicensed`). | Never string-match the message. `Snapshot.Reason` (`GateReason`) may drive logs or UI tweaks, never whether the command runs (`API.md` §5 "Status / reason taxonomy"). `LicenseType`/`ProductName`/`ExpiresAt` are display-only and `null` on failure; `LicenseKey` is the user's secret — never show or log it. |
 | G3 | **Never copy `NodeAec.Connector.dll` — Lite travels together.** | The Hub DLL never enters the add-in folder, `release/`, or `stage/` — the project carries no reference to it at all. The Lite assembly + its deps (`BouncyCastle.Cryptography`, net48 `System.Text.Json`/`ProtectedData`) DO ship with the plugin via `CopyLocalLockFileAssemblies=true`. Same rule family as never shipping `RevitAPI*.dll` (`API.md` §13 "Migrating an existing plugin to Lite", §14). |
 | G4 | **Never create a plugin-owned ribbon tab.** | One shared `Node.aec` tab; a plugin adds its own panel (`Sample Plugin`) and button (`Hello World`) inside it (`API.md` §6 "Ribbon integration conventions"). |
 | G5 | **Never call Node.aec HTTP APIs and never build login/license-manager UI.** | A plugin does local, offline validation only; the connector owns SSO, sync, heartbeat, and its UI. `ConnectorApiClient` is Hub-internal (`API.md` §1 "Overview & responsibility split", §4 "Public integration surface"). |
 | G6 | **The upstream connector repo is READ-ONLY.** | `../revit-connector` (github.com/nodeaec/revit-connector): never write, never "fix" it from this repo's sessions (§10). |
 | G7 | **Code wins over docs — and code changes update docs in the SAME change.** | Any change to `src/SamplePlugin/*` updates `API.md` **and** `.agents/skills/nodeaec-connector-integration/SKILL.md` **and** `README.md` together (table in §9, migration docs in `API.md` §§13–14 included). Never land a code-only or doc-only behavioral change. |
 | G8 | **Never swallow an exception into "licensed".** | Catches may fail closed (blocked dialog + `Result.Cancelled`) or degrade (`OpenConnector()` → silent no-op). A `catch` that proceeds with the feature, or that returns `Result.Succeeded` on an unknown state, is forbidden. |
-| G9 | **Connector Portuguese strings are verbatim — and they are the whole message.** | Show `GateResult.Message` as-is; never translate, re-word, or trim it. It already names the one specific reason and the next step, so it is the dialog's content: never surround it with a generic list of possible causes (the user cannot tell which applies and the real reason gets buried) (`API.md` §5). |
+| G9 | **The gate's message is verbatim — and it is the whole message.** | Show `gate.GetMessage(language)` as-is (Portuguese or English, following Revit's UI language); never translate, re-word, or trim it. It already names the one specific reason and the next step, so it is the dialog's content: never surround it with a generic list of possible causes (the user cannot tell which applies and the real reason gets buried) (`API.md` §5). |
 
 ---
 
@@ -89,10 +88,10 @@ Use these exact values and names everywhere — docs, code, dialogs, commits. Ne
 | Recommended ribbon pattern | Local idempotent dedup replica + AdWindows hooks (`ApplicationInitialized`, `UIElementActivated`, `-=` before `+=`). The connector's public `DeduplicateRibbonTabs`/`CleanRogueRibbonElements` are documented **OPTIONAL helpers** with a JIT-load tradeoff — calling them pulls `NodeAec.Connector` into your process at ribbon time. |
 | Packaging | `SamplePlugin.addin` at the `Addins\<year>\` **root**, relative `<Assembly>` `SamplePlugin\SamplePlugin.dll` → `Addins\<year>\SamplePlugin\SamplePlugin.dll` |
 | Build | SDK-style csproj; `-p:RevitYear=2023..2027` → `net48` / `net8.0-windows` / `net10.0-windows` (default `2026`); `NodeAec.Licensing.Lite` via NuGet restore |
-| `Snapshot` members (exactly six) | `IsLicensed`, `LicenseType`, `LicenseKey`, `ProductName`, `ExpiresAt`, `Message` — payload fields `null` on failure; **only** branch point is `IsLicensed` |
-| Failure UX | Gate `Message` verbatim as the dialog content + `NodeAecLicenseGate.OpenConnector()` command link + `Result.Cancelled` (fail-closed, never proceed unlicensed) |
+| `Snapshot` members | `IsLicensed`, `Reason`, `GetMessage(MessageLanguage)`, `Message` (Portuguese), `LicenseType`, `LicenseKey`, `ProductName`, `ExpiresAt` — payload fields `null` on failure; **only** branch point is `IsLicensed` |
+| Failure UX | `gate.GetMessage(language)` verbatim as the dialog content + `Gate.OpenConnector()` command link + `Result.Cancelled` (fail-closed, never proceed unlicensed) |
 | Command class | `SamplePlugin.Commands.HelloCommand` |
-| Seam | `SamplePlugin.Licensing.NodeAecLicenseGate.Validate()` → `GateSnapshot`; `NodeAecLicenseGate.OpenConnector()`; `NodeAecLicenseGate.BuildLicenseBlock(GateSnapshot)` — backed by `NodeAec.Licensing.Gate.Validate` (`API.md` §§13–14) |
+| Gate call | `NodeAec.Licensing.Gate.Validate(ProductSlug)` → `Snapshot`, called directly in each command; no wrapper class (`API.md` §9, §§13–14) |
 
 ---
 
@@ -129,16 +128,16 @@ the **manual test protocol**, whose home is `API.md` (§3.3 packaging checklist,
 "Troubleshooting / FAQ"), restated as an actionable checklist in
 [`.agents/skills/nodeaec-connector-integration/SKILL.md`](.agents/skills/nodeaec-connector-integration/SKILL.md)
 and in [`README.md`](README.md) (validate step).
-Do not invent a unit-test harness that mocks the gate — the seam's contract is
-"never throws, fail closed", and it is proven by build + manual run in a real Revit
+Do not invent a unit-test harness that mocks the gate — its contract is
+"never throws, fail closed" (tested in the Lite repository), and it is proven by build + manual run in a real Revit
 session:
 
 1. Install the connector for the target year; deploy `SamplePlugin.addin` +
    `SamplePlugin\SamplePlugin.dll` to `Addins\<year>\`.
-2. Licensed run → greeting dialog with the `BuildLicenseBlock` fields, `Result.Succeeded`.
+2. Licensed run → greeting dialog with product, type and expiry (no license key), `Result.Succeeded`.
 3. Unlicensed runs (no lease / wrong slug / cleared lease) → blocked dialog showing the
-   gate `Message` verbatim, `Open Node.aec Connector...` link, `Result.Cancelled`.
-4. Hub **not installed** → same blocked dialog (`Nenhuma credencial…`), link is a
+   gate message verbatim, in Revit's UI language, `Open Node.aec Connector...` link, `Result.Cancelled`.
+4. Hub **not installed** → same blocked dialog (`NoLease`: *No Node.aec credentials…* / *Nenhuma credencial…*), link is a
    silent no-op, no crash.
 5. Reload the add-in twice (Add-In Manager) → no duplicate `Node.aec` tabs/buttons (no ghost tab).
 6. Confirm `release/`/`stage/` contain neither `RevitAPI*.dll`/`AdWindows.dll` nor `NodeAec.Connector.dll` — while Lite + deps travel together (`ProtectedData.dll` only on net48).
@@ -153,9 +152,7 @@ session:
 - The csproj uses the explicit `Sdk.props` / `Sdk.targets` import form so the
   Revit-year matrix evaluates before the SDK import. **Keep those imports** if you edit
   the csproj; `BaseIntermediateOutputPath` must stay that early.
-- File-scoped namespaces (`namespace SamplePlugin.Licensing;`). One type per file, except
-  `NodeAecLicenseGate.cs` where `GateSnapshot` lives beside its producer — do not split
-  them.
+- File-scoped namespaces (`namespace SamplePlugin.Commands;`). One type per file.
 - Revit API references stay reference-only (`PrivateAssets="all" ExcludeAssets="runtime"`);
   dependency DLLs travel with the add-in (`CopyLocalLockFileAssemblies=true`).
 
@@ -169,18 +166,15 @@ session:
 
 **Documentation & comments**
 - XML doc comments (`/// <summary>`) on **every public type and member** and on private
-  helpers too; use `<see cref="…">`, `<param>`, `<returns>`. The public seam
-  (`NodeAecLicenseGate`, `GateSnapshot`) is the documented API of this sample — its docs
-  must stay accurate.
-- Comments explain *why*, not *what*: JIT-isolation rationale in the seam, reload-safety
+  helpers too; use `<see cref="…">`, `<param>`, `<returns>`.
+- Comments explain *why*, not *what*: why the dialog shows the message alone, reload-safety
   in the ribbon hooks, "never depend on the connector at JIT time" in `App.cs`. Empty
-  `catch` blocks always carry a one-line justification. Step-numbered comments
-  (`// 1)`, `// 2)`, …) mark the command's control flow.
+  `catch` blocks always carry a one-line justification.
 - Do not add banner comments, restated code, or changelog narration in source.
 
 **Error handling shape**
-- Command boundary: defensive `try/catch` around the gate call and around the UI
-  block; every catch returns `ShowFailClosed()` → `Result.Cancelled`.
+- Command boundary: no `try/catch` around `Gate.Validate` — it never throws, and a
+  catch would only add a path to get wrong. Never catch an exception into the licensed branch (G8).
 - Expected exceptions are filtered: `catch (Exception ex) when (ex is
   Autodesk.Revit.Exceptions.ArgumentException || ex is ArgumentException)` — never a bare
   `catch` where a real error could hide.
@@ -188,10 +182,8 @@ session:
   throwing out of `OnStartup`; `OnStartup` has a top guard.
 
 **Connector isolation**
-- `NodeAec.Licensing` types appear **only** inside `Licensing/NodeAecLicenseGate.cs`.
-  Never let a `Snapshot` (or any licensing type) cross into a command signature,
-  field, or expression — commands speak only the plugin-local `GateSnapshot`
-  (`API.md` §9 "Fail-closed recipe (`NodeAecLicenseGate.cs`)", §13).
+- Commands use `NodeAec.Licensing` (`Gate`, `Snapshot`, `MessageLanguage`) directly; there is
+  no wrapper class (`API.md` §9 "Command recipe (`HelloCommand.cs`)", §13).
 - `App.cs` stays connector-free entirely (string copies of ribbon constants, no type use, zero licensing calls at startup).
 
 ---
@@ -207,19 +199,19 @@ Cross-reference `API.md` **by these section titles** (they are stable):
 | First-time Lite adoption for standalone plugins (no prior Node.aec integration): `PackageReference` Lite, gate-first commands, shared-tab ribbon, Lite traveling with the payload | §13 *Migrating an existing plugin to Lite* |
 | Executable agent/CI checklist + `nodeaec-verify` SHALL | §14 *Agent / CI verification track* |
 | Authoritative dependency + packaging/manifest layout | §3 *The integration path (authoritative)* |
-| `NodeAecGate.Validate`, every `GateResult` member, `OpenConnector()`, `ConnectorLog`, secondary types, ribbon helper visibility | §4 *Public integration surface* |
-| The 17 verbatim failure messages → situation → handling; "one path for every row" | §5 *Status / reason taxonomy* |
+| `Gate.Validate`, every `Snapshot` member, `GateReason`, `MessageLanguage`, `OpenConnector()`, ribbon helper visibility | §4 *Public integration surface* |
+| Every `GateReason` → situation → message → handling; "one path for every row" | §5 *Status / reason taxonomy* |
 | Ribbon MUST / MUST-NOT table, recommended local-replica pattern, OPTIONAL helper tradeoff | §6 *Ribbon integration conventions* |
 | Call `Validate` once per command, UI-thread rules, no HTTP, no blocking I/O | §7 *Threading & Revit API-context rules* |
 | `RevitYear` → TFM matrix, package pins, assembly-versioning uncertainty | §8 *Versioning & compatibility matrix* |
-| The seam source (`NodeAecLicenseGate` + `GateSnapshot`) and why the isolation boundary exists | §9 *Fail-closed recipe (`NodeAecLicenseGate.cs`)* |
+| The full command source and why it needs no wrapper or `try/catch` | §9 *Command recipe (`HelloCommand.cs`)* |
 | Build/install failure Q&As, log location, DPAPI-in-CI caveat | §10 *Troubleshooting / FAQ* |
 | Term definitions (fail-closed, master lease, ghost tab, AdWindows, …) | §11 *Glossary* |
 | Verification provenance (revit-connector@7366482) and flagged uncertainties | §12 *Verification & related documents* |
 
 Contract in one paragraph: add the `NodeAec.Licensing.Lite` package (never
-copy the Hub DLL — Lite compiles in and travels with your payload), put the single slug constant in `NodeAecLicenseGate`, call `Validate()` at the
-entry of every command, branch only on `IsLicensed`, render `Message` verbatim with
+copy the Hub DLL — Lite compiles in and travels with your payload), declare one `ProductSlug` constant, call `Gate.Validate(ProductSlug)` at the
+entry of every command, branch only on `IsLicensed`, render `gate.GetMessage(language)` verbatim with
 an `OpenConnector()` link + `Result.Cancelled` on failure, add panel `Sample Plugin`
 with button `Hello World` to the shared `Node.aec` tab using the local idempotent
 replica + AdWindows hooks, ship the manifest at `Addins\<year>\` root with a relative
@@ -236,15 +228,15 @@ It is the authoritative workflow for this repo; this section is its summary.
 Checklist (order matters):
 
 1. **Copy the shape, not the names you must change.** Keep `App.cs`, `HelloCommand.cs`,
-   `NodeAecLicenseGate.cs`, the `.addin`.
-2. **Change the one constant:** `NodeAecLicenseGate.ProductSlug` → your catalog slug.
+   the `.addin`.
+2. **Change the one constant:** `HelloCommand.ProductSlug` → your catalog slug.
    Everything else about licensing stays identical.
 3. **Rename identity:** assembly/root namespace, `Name` in the `.addin`, a **fresh
    `AddInId` GUID** (never reuse the sample's or the connector's), `FullClassName` → your
    `IExternalApplication`, ribbon `PanelName`/`ButtonId`/`ButtonText` (keep the shared
    `Node.aec` tab), tooltips and dialog titles.
-4. **Gate every command:** `NodeAecLicenseGate.Validate()` first statement; branch only
-   on `IsLicensed`; failure UX = `Message` verbatim + `OpenConnector()` link +
+4. **Gate every command:** `Gate.Validate(ProductSlug)` first statement; branch only
+   on `IsLicensed`; failure UX = `gate.GetMessage(language)` verbatim + `Gate.OpenConnector()` link +
    `Result.Cancelled`. No exceptions swallowed into the licensed path.
 5. **Ribbon:** keep the local idempotent replica + AdWindows hooks pattern; treat the
    connector's `DeduplicateRibbonTabs`/`CleanRogueRibbonElements` as OPTIONAL (JIT-load
@@ -268,7 +260,7 @@ A change to column X **must** update column Y in the same commit (rule G7):
 
 | If you change… | Update in the SAME change |
 |---|---|
-| Seam signatures/behavior (`Validate`, `OpenConnector`, `BuildLicenseBlock`, `GateSnapshot` members) | `API.md` §9 *Fail-closed recipe (`NodeAecLicenseGate.cs`)* + `.agents/skills/nodeaec-connector-integration/SKILL.md` + `README.md` + XML docs in the source file |
+| Gate usage in commands (`Gate.Validate`, message language, `OpenConnector`, license block) | `API.md` §9 *Command recipe (`HelloCommand.cs`)* + `.agents/skills/nodeaec-connector-integration/SKILL.md` + `README.md` + XML docs in the source file |
 | Command control flow / failure UX (dialog shape, `Result` codes) | `API.md` §2 *Quickstart (happy path)* and §5 *Status / reason taxonomy* + skill + `README.md` |
 | Ribbon pattern, panel/button names, hooks | `API.md` §6 *Ribbon integration conventions* + skill + `README.md` + constants' XML docs |
 | Build matrix, TFM pins, `RevitYear` properties | `API.md` §8 *Versioning & compatibility matrix* + csproj header comment + `README.md` + skill |
@@ -347,13 +339,12 @@ Upstream: **https://github.com/nodeaec/revit-connector**, local read-only checko
 - ❌ Do not write to `../revit-connector`, or to anything outside this repo root (G6).
 - ❌ Do not land a code change without updating `API.md` + skill + `README.md` where §9
   requires it, and vice versa (G7).
-- ❌ Do not translate, trim, or re-word connector `Message` strings, and do not wrap them
+- ❌ Do not translate, trim, or re-word the gate's messages, and do not wrap them
   in a generic list of possible causes — show the message, offer the `OpenConnector()`
   link, and return `Result.Cancelled` (G9, §4).
-- ❌ Do not call `NodeAecLicenseGate.OpenConnector()` and depend on the window appearing
-  (silent no-op by contract) — show the dialog with `Message` first.
-- ❌ Do not put `NodeAec.Licensing` types in command signatures, fields, or expressions
-  outside `Licensing/NodeAecLicenseGate.cs`.
+- ❌ Do not call `Gate.OpenConnector()` and depend on the window appearing
+  (silent no-op by contract) — show the dialog with the message first.
+- ❌ Do not show or log `Snapshot.LicenseKey`: it is the end user's secret.
 - ❌ Do not treat a restore failure (`NU1101`) as a missing Hub and "fix" it with a
   loose DLL or a DLL reference — the Lite package comes from the feed (§5).
 - ❌ Do not rename canonical vocabulary (§4), reuse another add-in's `AddInId`, or rename

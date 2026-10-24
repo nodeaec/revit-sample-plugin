@@ -18,9 +18,9 @@ namespace SamplePlugin;
 /// hooks keep the tab deduplicated across add-in reloads.
 /// </para>
 /// <para>
-/// Deliberately contains no Node.aec Connector API calls: the Ribbon must come up
-/// even when the connector is missing, so the only connector surface of this sample
-/// lives in <see cref="Licensing.NodeAecLicenseGate"/>.
+/// Deliberately contains no licensing calls: the Ribbon must come up even when the
+/// connector is missing. The license check lives at the top of
+/// <see cref="Commands.HelloCommand.Execute"/>.
 /// </para>
 /// </summary>
 public class App : IExternalApplication

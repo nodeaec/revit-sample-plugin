@@ -59,15 +59,11 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);obj\**;bin\**</DefaultItemExcludes>
 
     <!--
-      LICENSING (frozen contract NodeAec.Licensing.Gate):
-        PackageReference NodeAec.Licensing.Lite — the verification code is compiled
-        INTO this plugin, so there is no external DLL to swap. No HintPath, no
-        Private=False, no connector install needed at build time. The only seam is
-        Licensing/NodeAecLicenseGate.cs: Gate.Validate(ProductSlug) as the first
-        statement of every command, branching only on IsLicensed.
-        PRE-RELEASE FEED: version 1.0.0-preview.1 resolves from the local folder
-        feed in NuGet.config (../revit-licensing-lite/.../bin/Release). At release
-        time (Onda 4) delete the local source and restore from NuGet.org.
+      LICENSING: PackageReference NodeAec.Licensing.Lite (restored from nuget.org). The
+      verification code ships INSIDE this plugin's folder, so there is no external DLL to
+      swap. No HintPath, no Private=False, no connector install needed at build time.
+      Every command calls Gate.Validate(ProductSlug) first and decides on IsLicensed only
+      (see Commands/HelloCommand.cs).
     -->
   </PropertyGroup>
 
@@ -95,7 +91,7 @@
     <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI" Version="$(RevitApiPkgVersion)" PrivateAssets="all" ExcludeAssets="runtime" />
     <PackageReference Include="Nice3point.Revit.Api.AdWindows" Version="$(RevitApiPkgVersion)" PrivateAssets="all" ExcludeAssets="runtime" />
     <!-- Offline license verification, compiled into this plugin. No HintPath: resolved from NuGet like any npm dependency. -->
-    <PackageReference Include="NodeAec.Licensing.Lite" Version="0.2.0" />
+    <PackageReference Include="NodeAec.Licensing.Lite" Version="0.3.0" />
   </ItemGroup>
 
   <ItemGroup>

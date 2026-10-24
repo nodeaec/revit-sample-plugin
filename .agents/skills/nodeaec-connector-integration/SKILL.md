@@ -3,10 +3,10 @@ name: nodeaec-connector-integration
 description: >-
   Implement Node.aec licensing in a new Revit plugin: scaffold with
   dotnet new nodeaec-revit-plugin, keep the NodeAec.Licensing.Lite
-  PackageReference, set the product slug, gate every IExternalCommand through
-  NodeAecLicenseGate.Validate() (fail-closed seam over Lite Gate), and package
+  PackageReference, set the product slug, gate every IExternalCommand with
+  Gate.Validate(slug) (fail-closed, never throws), and package
   with the .addin layout on the shared Node.aec ribbon tab. Use when a task
-  mentions Node.aec, nodeaec, NodeAecLicenseGate, Gate/Snapshot, product slug
+  mentions Node.aec, nodeaec, Gate/Snapshot, GateReason, product slug
   or entitlement gating, partner-plugin licensing, "license-gate this Revit
   command", or scaffolding a licensed Revit plugin. Not for editing the
   connector Hub itself or for cloud/HTTP license APIs.
@@ -16,15 +16,15 @@ description: >-
 
 New-plugin path: scaffold from the template, set the slug, gate every command.
 Worked example: this repository's `src/SamplePlugin/` (canonical names:
-`SamplePlugin.Commands.HelloCommand`, `NodeAecLicenseGate`) — the template's
-output for `-n SamplePlugin -p ProductSlug=revit-sample-plugin`. Deep detail
+`SamplePlugin.Commands.HelloCommand`). The template (0.1.0) still generates an older
+`Licensing/NodeAecLicenseGate.cs` wrapper; follow this sample instead and call `Gate.Validate` directly. Deep detail
 lives in [`references/`](references/) — read them when a step says so.
 
 ## 1. When to use
 
 Any task that makes a Revit add-in depend on a Node.aec entitlement: scaffolding
 a new licensed plugin, adding one more gated command, or porting the sample's
-seam into another plugin. Skip it only for plugins that ship no licensed
+gate pattern into another plugin. Skip it only for plugins that ship no licensed
 functionality.
 
 Migrating an existing STANDALONE plugin (no Node.aec integration yet) to Lite
@@ -35,8 +35,7 @@ full trail in API.md §13 *Migrating an existing plugin to Lite*.
 ## 2. Prerequisites
 
 - **.NET 8 SDK** (minimum) — builds every Revit year from the same machine.
-  No Hub install is needed to compile: the Lite package restores from its feed
-  (pre-release: the local folder in `NuGet.config`; at release: NuGet.org).
+  No Hub install is needed to compile: the Lite package restores from NuGet.org.
 - **Product slug registered and entitled** on the platform (this sample: the
   constant `ProductSlug = "revit-sample-plugin"` — [product page](https://nodeaec.com.br/products/revit-sample-plugin) — the single constant you change; set it at scaffold time).
 - **Supported Revit years**: 2023–2027 via `-p:RevitYear=<year>` (default 2026)
@@ -56,19 +55,19 @@ full trail in API.md §13 *Migrating an existing plugin to Lite*.
    ```
 
    You get `App.cs` (shared-tab ribbon, zero licensing calls),
-   `Commands/HelloCommand.cs` (gate-first command), `Licensing/NodeAecLicenseGate.cs`
-   (the seam), a relative-`<Assembly>` `.addin` manifest, a `RevitYear`-matrix
+   `Commands/HelloCommand.cs` (gate-first command), a `Licensing/NodeAecLicenseGate.cs`
+   wrapper (delete it and call `Gate.Validate` directly, as this sample does), a relative-`<Assembly>` `.addin` manifest, a `RevitYear`-matrix
    csproj with the Lite `PackageReference`, and `scripts/release.ps1` per group.
    *Decision point:* never start from an empty csproj and hand-wire licensing.
 
 2. **Confirm the slug.** The scaffold sets it; verify
-   `NodeAecLicenseGate.ProductSlug` matches your catalog slug exactly
+   the `ProductSlug` constant matches your catalog slug exactly
    (matching is trim + case-insensitive). This is the **one** constant you change.
-   Code details: [`references/licensing-seam.md`](references/licensing-seam.md).
+   Code details: [`references/licensing-gate.md`](references/licensing-gate.md).
 
 3. **Keep the package reference — it is the whole dependency** (API.md §3 *The
    integration path (authoritative)*). The scaffold already declares exactly one
-   `<PackageReference Include="NodeAec.Licensing.Lite" Version="1.0.0-preview.1">`
+   `<PackageReference Include="NodeAec.Licensing.Lite" Version="0.3.0">` (the template pins a version that is not on NuGet.org — set 0.3.0 or later)
    — resolved from NuGet, compiled into your plugin. Never add a `Reference` to an
    installed connector DLL, never a `ProjectReference`,
    **never copy a connector DLL next to your plugin**. Ship your `.addin` at the
@@ -82,21 +81,19 @@ full trail in API.md §13 *Migrating an existing plugin to Lite*.
    only opens the connector). Ungated commands are a release blocker, not a TODO.
 
 5. **Call the gate at entry of EVERY command, fail-closed.** First statement of
-   `Execute`: `var gate = NodeAecLicenseGate.Validate();` then branch **only**
-   on `gate.IsLicensed`. No work, no dialog, no transaction before the gate;
-   any exception or null state ⇒ fail closed. Call it once per execution, never
-   inside per-element loops (API.md §7 *Threading & Revit API-context rules*).
-   Build the licensed UX from the real fields: `Snapshot` exposes exactly
-   `IsLicensed`, `LicenseType`, `LicenseKey`, `ProductName`, `ExpiresAt`,
-   `Message` — payload fields are `null` on failure. Render them with
-   `NodeAecLicenseGate.BuildLicenseBlock(gate)` (treat `ExpiresAt == null` as
-   "no expiry recorded (perpetual)", never as expired). Failure UX: show the
-   gate's `Message` **verbatim** as the whole dialog content (it already names
-   the one reason and the next step — never add a generic list of causes) + an
-   `Open Node.aec Connector...` command link calling
-   `NodeAecLicenseGate.OpenConnector()` on click, then `Result.Cancelled`.
-   Never translate, string-match, or branch on `Message` — `IsLicensed` is the
-   only branch point (API.md §5 *Status / reason taxonomy*).
+   `Execute`: `Snapshot gate = Gate.Validate(ProductSlug);` then branch **only**
+   on `gate.IsLicensed`. No work, no dialog, no transaction before the gate.
+   It never throws, so no `try/catch` and no wrapper class. Call it once per
+   execution, never inside per-element loops (API.md §7 *Threading & Revit API-context rules*).
+   Licensed UX: `ProductName`, `LicenseType`, `ExpiresAt` (treat `ExpiresAt == null`
+   as "no end date (perpetual)", never as expired); never show or log `LicenseKey`.
+   Failure UX: show `gate.GetMessage(language)` **verbatim** as the whole dialog
+   content, with `language` from Revit's UI language (it already names the one
+   reason and the next step — never add a generic list of causes) + an
+   `Open Node.aec Connector...` command link calling `Gate.OpenConnector()` on
+   click, then `Result.Cancelled`. Never translate or string-match the message;
+   `Reason` is for logs only — `IsLicensed` is the only branch point
+   (API.md §5 *Status / reason taxonomy*).
 
 6. **Ribbon placement under the shared `Node.aec` tab** (API.md §6 *Ribbon
    integration conventions*): the scaffold already adds your own panel with your
@@ -122,9 +119,9 @@ full trail in API.md §13 *Migrating an existing plugin to Lite*.
 
 8. **Validation checklist.** No automated suite exists (Revit + DPAPI need a real
    session), so build the matrix above, then run in a real Revit session:
-    - [ ] Valid license (Hub installed, signed in, entitled) → licensed greeting with `BuildLicenseBlock` fields, `Result.Succeeded`
-    - [ ] No credentials / Hub absent → blocked dialog with the gate `Message` verbatim (`Nenhuma credencial…`), no crash, `Result.Cancelled` (no separate "Hub missing" state — Lite always runs)
-    - [ ] Not signed in / no entitlement / expired → blocked dialog, gate `Message` verbatim, `Result.Cancelled`
+    - [ ] Valid license (Hub installed, signed in, entitled) → licensed greeting with product, type and expiry (no license key), `Result.Succeeded`
+    - [ ] No credentials / Hub absent → blocked dialog with the gate message verbatim (`NoLease`), no crash, `Result.Cancelled` (no separate "Hub missing" state — Lite always runs)
+    - [ ] Not signed in / no entitlement / expired → blocked dialog, gate message verbatim in Revit's UI language, `Result.Cancelled`
     - [ ] Add-in reloaded twice → still one `Node.aec` tab, one button
     - [ ] `release`/`stage` contain neither `RevitAPI*.dll` nor `NodeAec.Connector.dll` (`ProtectedData.dll` only in `net48` payloads)
     - [ ] Docs still accurate: every `Source:` file/line link points at the intended
@@ -136,14 +133,14 @@ full trail in API.md §13 *Migrating an existing plugin to Lite*.
 
 | Pitfall | Why it hurts | Do this instead |
 |---|---|---|
-| Hand-wiring licensing into an empty project | Missed seam rules, wrong reference, divergent crypto | Scaffold step 1; the template did the wiring |
+| Hand-wiring licensing into an empty project | Missed gate rules, wrong reference, divergent crypto | Scaffold step 1; the template did the wiring |
 | Referencing an installed connector DLL | Swappable external DLL, and the build needs the Hub | Keep the Lite `PackageReference`; it compiles into your plugin |
 | Copying any connector DLL next to your plugin | Version skew, stale copies, fights the `never copy` rule family | Nothing to copy: Lite travels inside your payload automatically |
 | Creating your own ribbon tab | Two tabs fragment the ecosystem; the shared tab is canonical | Your panel inside the shared `Node.aec` tab |
 | Gating only some commands | Ungated path = free feature; fails review | Step 4 inventory; gate every command at entry |
-| Swallowing exceptions into "licensed" | Turns any error into a free pass — fail-open | Catch → not-licensed snapshot → `Result.Cancelled` |
-| Inventing `Snapshot` fields (seats, plan, licensee, slug, status, Hub-available flag) | They do not exist; the code will not compile | Only the six real members; `IsLicensed` branches |
-| Calling Node.aec HTTP APIs directly | Hub-internal, breaks the responsibility split | Only `NodeAecLicenseGate.Validate()` / `OpenConnector()` |
+| Swallowing exceptions into "licensed" | Turns any error into a free pass — fail-open | No catch around the gate; decide on `IsLicensed` only |
+| Inventing `Snapshot` fields (seats, plan, licensee, slug, Hub-available flag) | They do not exist; the code will not compile | Only the real members (see `references/licensing-gate.md`); `IsLicensed` branches |
+| Calling Node.aec HTTP APIs directly | Hub-internal, breaks the responsibility split | Only `Gate.Validate(slug)` / `Gate.OpenConnector()` |
 
 ## 5. Adapt-to-your-plugin mapping
 
@@ -162,11 +159,10 @@ full trail in API.md §13 *Migrating an existing plugin to Lite*.
 - [`API.md`](../../../API.md) — §2 *Quickstart (happy path)*, §3 *The
   integration path (authoritative)*, §5 *Status / reason taxonomy*, §6 *Ribbon
   integration conventions*, §7 *Threading & Revit API-context rules*, §9
-  *Fail-closed recipe (`NodeAecLicenseGate.cs`)*, §10 *Troubleshooting / FAQ*.
+  *Command recipe (`HelloCommand.cs`)*, §10 *Troubleshooting / FAQ*.
 - [`README.md`](../../../README.md) · [`AGENTS.md`](../../../AGENTS.md) — repo
   orientation and agent rules for this sample.
 - Worked source: <https://github.com/nodeaec/revit-sample-plugin> —
-  `src/SamplePlugin/Licensing/NodeAecLicenseGate.cs`,
   `src/SamplePlugin/Commands/HelloCommand.cs`, `src/SamplePlugin/App.cs`,
   `src/SamplePlugin/SamplePlugin.csproj`, `src/SamplePlugin/SamplePlugin.addin`.
 - Upstream connector (read-only, background only):
