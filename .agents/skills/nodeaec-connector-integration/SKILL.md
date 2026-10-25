@@ -16,8 +16,9 @@ description: >-
 
 New-plugin path: scaffold from the template, set the slug, gate every command.
 Worked example: this repository's `src/SamplePlugin/` (canonical names:
-`SamplePlugin.Commands.HelloCommand`) — the shape template 0.2.0+ generates. Template 0.1.0
-generated an older wrapper and an invalid `.addin`; reinstall with `--force` if you have it. Deep detail
+`SamplePlugin.Commands.HelloCommand`) — the shape template 0.3.0+ generates, bundle installer included (0.2.0
+generated the same code with per-group installers; 0.1.0 generated an older wrapper and an
+invalid `.addin`). Reinstall with `--force` if you have an older one. Deep detail
 lives in [`references/`](references/) — read them when a step says so.
 
 ## 1. When to use
@@ -70,9 +71,10 @@ full trail in API.md §13 *Migrating an existing plugin to Lite*.
    `<PackageReference Include="NodeAec.Licensing.Lite" Version="0.3.0">`
    — resolved from NuGet, compiled into your plugin. Never add a `Reference` to an
    installed connector DLL, never a `ProjectReference`,
-   **never copy a connector DLL next to your plugin**. Ship your `.addin` at the
-   `Addins\<year>` **root** with relative `<Assembly>MyPlugin\MyPlugin.dll</Assembly>`
-   pointing into your payload subfolder (the Lite assembly travels inside it).
+   **never copy a connector DLL next to your plugin**. Ship your plugin as one
+   `.bundle` (`scripts/release.ps1`): each `Contents\<group>\` folder holds the `.addin`
+   with relative `<Assembly>MyPlugin.dll</Assembly>` next to the DLL (the Lite assembly
+   travels inside it).
 
 4. **Inventory every command that must be gated.** List all `IExternalCommand`
    classes (and any other entry point that runs licensed work).
@@ -113,9 +115,9 @@ full trail in API.md §13 *Migrating an existing plugin to Lite*.
    dotnet build -p:RevitYear=2027   # net10.0-windows
    ```
 
-   Deploy the `.addin` + payload subfolder to
-   `%ProgramData%\Autodesk\Revit\Addins\<year>\`, or ship the per-group
-   installer from `scripts/release.ps1`.
+   Package with `scripts/release.ps1 -Version <x.y.z>`: one bundle and one
+   Setup.exe for Revit 2023–2027 (the user checks the Revit versions). `-Install`
+   copies the bundle to `%ProgramData%\Autodesk\ApplicationPlugins\`.
 
 8. **Validation checklist.** No automated suite exists (Revit + DPAPI need a real
    session), so build the matrix above, then run in a real Revit session:

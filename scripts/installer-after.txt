@@ -8,8 +8,8 @@ NodeAec.Licensing.Lite que acompanha o plugin: com licenca valida, ele
 mostra a saudacao e os dados da licenca; sem licenca, ele explica o motivo
 e oferece abrir o Node.aec Connector (para entrar, ativar ou renovar).
 
-Se o botao nao aparecer, verifique se o instalador correspondente ao ano
-do seu Revit foi executado (este instalador atende somente um grupo de anos).
+Se o botao nao aparecer, execute este instalador de novo e confira se a
+versao do seu Revit esta marcada.
 
 Suporte Node.aec: https://nodeaec.com.br
 Pagina do produto: https://nodeaec.com.br/products/revit-sample-plugin

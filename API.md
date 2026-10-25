@@ -160,38 +160,48 @@ needs `Config/ConnectorConfig.cs`, `Diagnostics/ConnectorLog.cs`,
 and hand-copied crypto diverges from the audited package), and no shipped copy of
 `NodeAec.Connector.dll`. Everything else in this document follows from that choice.
 
-### 3.3 Packaging contract (manifest + payload layout) — verified
+### 3.3 Packaging contract (bundle layout) — verified
 
-Proven against the connector's own packaging — `src/NodeAec.Connector/NodeAec.Connector.addin`
-and `scripts/release.ps1`:
+The plugin ships as one Autodesk bundle, the same format the Node.aec Connector uses
+(`revit-connector/scripts/release.ps1` and `installer.iss`). `scripts/release.ps1` builds
+every compatibility group and stages:
 
-- `release.ps1:157-163` sets `$installDir = "C:\ProgramData\Autodesk\Revit\Addins\$BuildYear\NodeAec.Connector"`
-  and rewrites the template manifest's `<Assembly>` to `"$installDir\$DllName"` (absolute);
-  `release.ps1:226-254` copies the DLLs into `Addins\<year>\NodeAec.Connector\` for every installed year of the group and the
-  `.addin` into each `Addins\<year>\` **root** (`installer.iss:315-323` + `453-464` write the same layout).
-- **Canonical layout: manifest at the `Addins\<year>\` root, the add-in's DLLs in a
-  dedicated subfolder beside it.** The connector's `<Assembly>` ships absolute (rewritten by
-  `release.ps1`); the template's original value is relative to the manifest.
+```
+%ProgramData%\Autodesk\ApplicationPlugins\SamplePlugin.bundle\
+  PackageContents.xml            one <Components> per Revit year (SeriesMin = SeriesMax = R<year>)
+  Contents\2023-2024\            net48            SamplePlugin.addin + SamplePlugin.dll + Lite + deps
+  Contents\2025-2026\            net8.0-windows   same files
+  Contents\2027\                 net10.0-windows  same files
+```
 
-The sample mirrors that layout exactly — this is the packaging contract for the plugin:
+Revit scans `ApplicationPlugins\*.bundle\PackageContents.xml` at startup and loads only
+the component whose `SeriesMin`/`SeriesMax` matches its own version, so one bundle covers
+2023–2027 and a year without a component does not load the plugin.
 
-| Piece | Sample | Connector (proof) |
-|---|---|---|
-| Manifest location | `%ProgramData%\Autodesk\Revit\Addins\<year>\SamplePlugin.addin` | `Addins\<year>\NodeAec.Connector.addin` (`release.ps1:163`) |
-| `<Assembly>` value | `SamplePlugin\SamplePlugin.dll` (relative to the manifest) → `Addins\<year>\SamplePlugin\SamplePlugin.dll` | absolute `Addins\<year>\NodeAec.Connector\NodeAec.Connector.dll` (`release.ps1:157-163`) |
-| `<AddInId>` | own GUID, unique per add-in (never reuse the connector's) | fixed GUID `4B8E1A2C-…` across years |
-| `<FullClassName>` | `SamplePlugin.App` (`IExternalApplication`) | `NodeAec.Connector.App` |
+| Piece | Value |
+|---|---|
+| Manifest | `Contents\<group>\SamplePlugin.addin` (the same file in every group, copied from `src/SamplePlugin/SamplePlugin.addin`) |
+| `<Assembly>` | `SamplePlugin.dll`: relative to the manifest, so it names the DLL in the same folder wherever the bundle is installed |
+| `<AddInId>` | own GUID, unique per add-in (never reuse the connector's) |
+| `<FullClassName>` | `SamplePlugin.App` (`IExternalApplication`) |
+| `ProductCode` / `UpgradeCodes` | fixed per product, identical in `release.ps1` and `installer.iss` |
 
-*Narrow caveat:* the connector repo only ever demonstrates the **absolute** `<Assembly>`
-form; the sample's relative form resolves against the manifest's own directory to the
-identical layout. If your packaging script rewrites `<Assembly>` to absolute (as
-`release.ps1` does), keep the target the same file: `Addins\<year>\SamplePlugin\SamplePlugin.dll`.
+The installer (`SamplePlugin-<version>-Setup.exe`) shows one checkbox per Revit year
+(installed years start checked; a re-run starts from the previous choice), copies only the
+builds the checked years need and writes `PackageContents.xml` for them. Silent installs
+take `/VERYSILENT /RevitYears=2025,2026`. It also removes installs made by the older
+per-group installers (`Addins\<year>\SamplePlugin.addin` + `SamplePlugin\`), so Revit never
+loads the plugin twice.
 
 Checklist:
 
-1. Plugin `.addin` manifest at `%ProgramData%\Autodesk\Revit\Addins\<year>\` (root), plugin DLLs in the `SamplePlugin\` subfolder (table above) — **including** the Lite licensing assembly, which arrives there automatically via `CopyLocalLockFileAssemblies=true`.
-2. Build the plugin with `RevitYear` = that year so the Revit API packages resolve (no connector install needed — §8.1).
+1. One bundle under `%ProgramData%\Autodesk\ApplicationPlugins\`, one `Contents\<group>\` folder per compatibility group, each with the manifest, the plugin DLL and **the Lite licensing assembly** (copied there by `CopyLocalLockFileAssemblies=true`).
+2. Build each group with its floor year (`RevitYear` = 2023, 2025, 2027) so one DLL loads on every year of the group (no connector install needed — §8.1).
 3. `release/`/`stage/` of your plugin contains **neither** `RevitAPI*.dll` **nor** `NodeAec.Connector.dll` (the Hub is never a payload); `System.Security.Cryptography.ProtectedData.dll` appears **only** in `net48` payloads (§8.1).
+
+A per-year `.addin` under `%ProgramData%\Autodesk\Revit\Addins\<year>\` also works with
+the gate (it does not care where the plugin is installed); the bundle is what this sample
+and the template ship.
 
 ---
 
@@ -576,8 +586,8 @@ Notes:
 - The `ProtectedData.dll` rule above is about *your plugin's payload*, which now
   includes Lite's dependencies: on `net48` the DLL travels with your add-in (correct);
   on net8/net10 its presence in `release/`/`stage/` is a packaging bug.
-- Your `.addin` manifests deploy per year under `%ProgramData%\Autodesk\Revit\Addins\<year>\`;
-  the Hub (if installed) lives in its own per-year folder and is never referenced (§3.1).
+- Your plugin deploys as its own bundle under `%ProgramData%\Autodesk\ApplicationPlugins\`
+  (§3.3); the Hub lives in its own `NodeAec.Connector.bundle` and is never referenced (§3.1).
 
 ### 8.2 Assembly versioning
 
@@ -812,7 +822,8 @@ maintenance burden, divergent versions). Exactly one integration path is authori
 | **Shared tab** | The single `Node.aec` Ribbon tab owned by the connector; plugins add panels only |
 | **AdWindows** | `Autodesk.Windows` (AdWindows.dll) — low-level Ribbon API used for tab deduplication |
 | **Ghost tab** | Duplicate/rogue Ribbon tab left by add-in reloads; removed by your local dedup (replica of `App.DeduplicateRibbonTabs`) or, optionally, the connector's `DeduplicateRibbonTabs`/`CleanRogueRibbonElements` (§6 tradeoff) |
-| **`.addin`** | Revit manifest in `%ProgramData%\Autodesk\Revit\Addins\<year>\` pointing at an assembly |
+| **`.addin`** | Revit manifest pointing at an assembly; in a bundle it sits in `Contents\<group>\` next to the DLL |
+| **`.bundle`** | Autodesk package folder under `%ProgramData%\Autodesk\ApplicationPlugins\`; its `PackageContents.xml` maps each Revit year to a `Contents\<group>\` build |
 | **`RevitYear`** | MSBuild property `2023`–`2027` selecting TFM and API packages |
 | **TFM** | Target framework: `net48`, `net8.0-windows`, `net10.0-windows` per year |
 | **Hub / ConnectorApiClient** | Connector's internal HTTP client + cloud API — out of bounds for plugins |
@@ -823,8 +834,9 @@ maintenance burden, divergent versions). Exactly one integration path is authori
 
 - **Gate surface verified against `NodeAec.Licensing.Lite 0.3.0`** — every
   `Gate`/`Snapshot`/`GateReason` identifier, signature and verbatim message above was
-  checked against the Lite source. The `NodeAec.Templates.RevitPlugin` template 0.2.0
-  generates this same shape (0.1.0 generated an older wrapper class, pinned a Lite version
+  checked against the Lite source. The `NodeAec.Templates.RevitPlugin` template 0.3.0
+  generates this same shape, bundle installer included (0.2.0 generated the same code with
+  per-group `.addin` installers; 0.1.0 generated an older wrapper class, pinned a Lite version
   that is not on NuGet.org, and wrote a `.addin` with invalid XML).
 - **Hub behavior verified against revit-connector@7366482** — the Hub-side facts
   retained in this document (SSO/lease-sync ownership, Hub log path, `OpenConnector`
@@ -940,9 +952,10 @@ dotnet build -p:RevitYear=2027   # net10.0-windows
 **Step 6 — Packaging checklist.** `release/`/`stage/` with **no**
 `RevitAPI*.dll`, no `AdWindows.dll`/`UIFramework*`, no `NodeAec.Connector.dll`;
 Lite (and `BouncyCastle.Cryptography`, `System.Text.Json`/`ProtectedData` on
-net48) **ships together** via `CopyLocalLockFileAssemblies=true`. Manifest at the year
-root (`Addins\<year>\YourPlugin.addin`), relative `<Assembly>`
-(`YourPlugin\YourPlugin.dll`).
+net48) **ships together** via `CopyLocalLockFileAssemblies=true`. One bundle
+(`ApplicationPlugins\YourPlugin.bundle\`) with a `Contents\<group>\` folder per
+compatibility group, each holding the manifest with relative `<Assembly>YourPlugin.dll</Assembly>`
+(§3.3).
 
 **Step 7 — Manual protocol** (real Revit session; DPAPI requires interactive logon):
 

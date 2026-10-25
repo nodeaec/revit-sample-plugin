@@ -2,25 +2,34 @@
 <!--
   Sample Plugin add-in manifest.
 
-  Install layout (per RevitYear, mirrors the Node.aec Connector convention of a
-  manifest at the Addins folder root + payload in a subfolder):
+  Install layout: an Autodesk bundle with one build per Revit compatibility group
+  (scripts/release.ps1 and scripts/installer.iss copy this file next to each build):
 
-    %ProgramData%\Autodesk\Revit\Addins\<year>\SamplePlugin.addin          (this file)
-    %ProgramData%\Autodesk\Revit\Addins\<year>\SamplePlugin\SamplePlugin.dll
+    %ProgramData%\Autodesk\ApplicationPlugins\SamplePlugin.bundle\
+      PackageContents.xml                       one component per Revit year
+      Contents\<group>\SamplePlugin.addin       (this file)
+      Contents\<group>\SamplePlugin.dll
 
-  <Assembly> is relative to the location of THIS manifest file. When a packaging
-  script rewrites it to an absolute path (as scripts/release.ps1 does for the
-  connector), keep the target identical: ...\Addins\<year>\SamplePlugin\SamplePlugin.dll
+  <Assembly> is relative to the location of THIS manifest file, so it names the DLL
+  in the same folder.
 
-  <AddInId> is unique to this add-in (generated fresh for the sample; never reuse
-  the connector's GUID). <FullClassName> must match the IExternalApplication in
-  App.cs — the IExternalCommand is reached through the Ribbon button, so it does
-  not need its own manifest entry.
+  The elements, and why each one matters:
+    Type="Application"  Revit creates <FullClassName> once at startup (IExternalApplication).
+                        The IExternalCommand is reached through the Ribbon button that
+                        App.cs adds, so it needs no manifest entry of its own.
+    <Name>              Shown by Revit in its add-in load messages.
+    <AddInId>           The add-in's identity. Revit refuses to load a second add-in with
+                        an AddInId it has already loaded, so generate a fresh GUID for every
+                        plugin and never reuse the sample's or the connector's.
+    <FullClassName>     Namespace + class of the IExternalApplication in App.cs; a typo
+                        here means Revit reports "class not found" and loads nothing.
+    <VendorId>          Publisher code (Revit requires one; Autodesk asks for a unique
+                        symbol per vendor). Node.aec add-ins use NODEAEC.
 -->
 <RevitAddIns>
   <AddIn Type="Application">
     <Name>Sample Plugin</Name>
-    <Assembly>SamplePlugin\SamplePlugin.dll</Assembly>
+    <Assembly>SamplePlugin.dll</Assembly>
     <AddInId>B6BD6575-DBB6-412A-A5EA-0843ABE8D9B6</AddInId>
     <FullClassName>SamplePlugin.App</FullClassName>
     <VendorId>NODEAEC</VendorId>

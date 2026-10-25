@@ -12,6 +12,13 @@
                                        while the reverse fails in 2026.0-2026.4)
       2027        -> net10.0-windows
 
+    Why one build per group and not per year: each Revit year runs a specific .NET
+    runtime (.NET Framework 4.8 up to 2024, .NET 8 for 2025-2026, .NET 10 for 2027), and
+    a DLL must target the runtime of the Revit that loads it. Inside a group the API is
+    compatible upward, so release.ps1 compiles each group with its OLDEST year (2023,
+    2025, 2027): a DLL built against the 2025 API also loads in 2026, while one built
+    against 2026 could call members that 2025 lacks.
+
     Build:
       dotnet build src/SamplePlugin/SamplePlugin.csproj -p:RevitYear=2026   # default
       dotnet build src/SamplePlugin/SamplePlugin.csproj -p:RevitYear=2023   # net48
@@ -51,7 +58,9 @@
     -->
     <NoWarn Condition="'$(TargetFramework)' == 'net48'">$(NoWarn);CS8602;CS8603;CS8604</NoWarn>
 
-    <!-- Isolate intermediate/output folders per Revit year so looped builds never overwrite each other. -->
+    <!-- Isolate intermediate/output folders per Revit year so looped builds never overwrite each other
+         (NuGet restore writes obj\project.assets.json for ONE target framework; sharing obj\ between
+         years would make the next build reuse the wrong framework's packages). -->
     <BaseIntermediateOutputPath>obj\$(RevitYear)\</BaseIntermediateOutputPath>
     <BaseOutputPath>bin\$(RevitYear)\</BaseOutputPath>
     <!-- Once a second year has been built, sibling obj\2024\, obj\2025\, ... folders must not
@@ -75,29 +84,37 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>SamplePlugin</RootNamespace>
     <AssemblyName>SamplePlugin</AssemblyName>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
     <Description>Sample Plugin — reference integration of Node.aec licensing (Gate / Lite) for Autodesk Revit.</Description>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <!-- Autodesk.Windows (AdWindows) surfaces WPF types; same flag the connector uses. -->
     <UseWPF>true</UseWPF>
-    <!-- Dependency DLLs (not RevitAPI) travel with the add-in — including the Lite licensing assembly. -->
+    <!-- Dependency DLLs (not RevitAPI) travel with the add-in — including the Lite licensing assembly.
+         A class library normally leaves its NuGet dependencies for the app that uses it to
+         copy; Revit is not that kind of app, it only loads what sits next to this DLL. This
+         switch copies them into bin\, and release.ps1 ships that folder. -->
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Revit API assemblies are provided by Revit at runtime: reference-only, never copied. -->
+    <!-- Revit API assemblies are provided by Revit at runtime: reference-only, never copied.
+         PrivateAssets="all" keeps them out of anything that references this project, and
+         ExcludeAssets="runtime" keeps them out of bin\. A copied RevitAPI.dll of one exact build
+         would clash with the one Revit already loaded. -->
     <PackageReference Include="Nice3point.Revit.Api.RevitAPI" Version="$(RevitApiPkgVersion)" PrivateAssets="all" ExcludeAssets="runtime" />
     <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI" Version="$(RevitApiPkgVersion)" PrivateAssets="all" ExcludeAssets="runtime" />
     <PackageReference Include="Nice3point.Revit.Api.AdWindows" Version="$(RevitApiPkgVersion)" PrivateAssets="all" ExcludeAssets="runtime" />
-    <!-- Offline license verification, compiled into this plugin. No HintPath: resolved from NuGet like any npm dependency. -->
+    <!-- Offline license verification, compiled into this plugin. No HintPath: resolved from NuGet like any npm dependency.
+         Revit loads ONE copy of NodeAec.Licensing.Lite per session on Revit 2025+ (the first to
+         load, usually the Connector's), and Lite only ever adds members. So build against the Lite
+         version the current Connector ships, or an older one, never a newer one. -->
     <PackageReference Include="NodeAec.Licensing.Lite" Version="0.3.0" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Ship the manifest with the payload: packaging drops this file at
-         <year>\SamplePlugin.addin and the DLL at <year>\SamplePlugin\SamplePlugin.dll
-         (the relative Assembly path inside the manifest assumes exactly that layout). -->
+    <!-- Ship the manifest with the payload: packaging puts this file next to the DLL in
+         each Contents\<group>\ folder of the bundle (its Assembly path is relative). -->
     <None Update="SamplePlugin.addin" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

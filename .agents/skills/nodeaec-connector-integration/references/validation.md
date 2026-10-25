@@ -22,11 +22,13 @@ Payload hygiene — the `release/`/`stage/` output must contain **neither**
 `RevitAPI*.dll`/`AdWindows.dll` **nor** `NodeAec.Connector.dll`, while Lite and
 its deps **travel together** (`NodeAec.Licensing.Lite.dll`,
 `BouncyCastle.Cryptography.dll`, plus `System.Text.Json.dll` /
-`System.Security.Cryptography.ProtectedData.dll` on net48 only). Manifest layout:
+`System.Security.Cryptography.ProtectedData.dll` on net48 only). Bundle layout:
 
 ```
-%ProgramData%\Autodesk\Revit\Addins\<year>\SamplePlugin.addin          (root)
-%ProgramData%\Autodesk\Revit\Addins\<year>\SamplePlugin\SamplePlugin.dll
+%ProgramData%\Autodesk\ApplicationPlugins\SamplePlugin.bundle\
+  PackageContents.xml                        one component per Revit year
+  Contents\<group>\SamplePlugin.addin        Assembly = SamplePlugin.dll (relative)
+  Contents\<group>\SamplePlugin.dll          + Lite and its dependencies
 ```
 Source: [SamplePlugin.addin](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/SamplePlugin.addin).
 
@@ -42,15 +44,15 @@ interactive logon — CI/headless cannot cover this). Record: dialog shown,
 | 2 | **Blocked — not signed in** | Connector installed; clear the session / sign out (lease absent) | Blocked dialog showing gate `Message` verbatim (`Nenhuma credencial do Node.aec encontrada nesta estação…`); command link opens the connector UI; `Result.Cancelled` |
 | 3 | **Blocked — no entitlement** | Signed in with an account that lacks slug `revit-sample-plugin` (or a typo'd `ProductSlug`) | Blocked dialog with `O produto 'revit-sample-plugin' não consta nas licenças ativas desta conta…` verbatim; `Result.Cancelled` |
 | 4 | **Blocked — expired** | Entitlement past `ExpiresAt` (test account, or wait out offline grace) | Blocked dialog with `A licença ou período de teste de '…' expirou em {dd/MM/yyyy}.` verbatim; `Result.Cancelled` |
-| 5 | **No lease (Hub absent)** | Uninstall the Node.aec Connector for that year (or rename its `Addins\<year>\NodeAec.Connector\` folder), restart Revit | Command still loads; gate reads no lease; blocked dialog with `Nenhuma credencial…` verbatim; `Open Node.aec Connector...` click is a silent no-op; `Result.Cancelled`; no crash |
+| 5 | **No lease (Hub absent)** | Uninstall the Node.aec Connector (or rerun its Setup with that year unchecked), restart Revit | Command still loads; gate reads no lease; blocked dialog with `Nenhuma credencial…` verbatim; `Open Node.aec Connector...` click is a silent no-op; `Result.Cancelled`; no crash |
 | 6 | **Reload (no ghost tab)** | Add-In Manager → reload the add-in twice | Still one `Node.aec` tab, one button (idempotency + AdWindows dedup hooks) |
 
 ## 3. `nodeaec-verify` (concept — future SHALL, no real script today)
 
 Confirmed: `scripts/` contains only `release.ps1`/`installer.iss` (+afters). CI
 SHALL gain a `nodeaec-verify` that fails when: the payload contains
-`RevitAPI*`/`AdWindows`/`UIFramework*`/`NodeAec.Connector.dll`; the manifest is outside the
-year root or `<Assembly>` is not relative; a `HintPath.*NodeAec.Connector` or
+`RevitAPI*`/`AdWindows`/`UIFramework*`/`NodeAec.Connector.dll`; a `Contents\<group>\` folder lacks
+its manifest or `<Assembly>` is not relative; a `HintPath.*NodeAec.Connector` or
 `ProjectReference.*Connector` remains in the csproj; `ProtectedData.dll` is outside the
 net48 payload. Until it exists, the checklist grep (API.md §14) applies — do not quote
 a script path as if it existed.

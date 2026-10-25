@@ -9,8 +9,8 @@ license it shows the greeting and the license details; without one it
 explains why and offers to open the Node.aec Connector (to sign in,
 activate or renew).
 
-If the button does not show up, make sure you ran the installer matching
-your Revit year (each installer serves exactly one year group).
+If the button does not show up, run this installer again and check that
+your Revit version is checked.
 
 Node.aec support: https://nodeaec.com.br
 Product page: https://nodeaec.com.br/products/revit-sample-plugin

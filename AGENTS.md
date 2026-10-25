@@ -46,9 +46,9 @@ security boundary.
 | `src/SamplePlugin/SamplePlugin.csproj` | SDK-style project: Revit-year matrix, the `NodeAec.Licensing.Lite` `PackageReference`, per-year `bin\`/`obj\` isolation. Header comment documents the build commands — keep it in sync with reality. ([source](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/SamplePlugin.csproj)) |
 | `src/SamplePlugin/App.cs` | `IExternalApplication`. Builds the shared ribbon: `Node.aec` tab (defensive create), panel `Sample Plugin`, button `Hello World`, local tab-dedup replica + AdWindows hooks. **Contains zero Node.aec Connector API calls** — by design. ([source](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/App.cs)) |
 | `src/SamplePlugin/Commands/HelloCommand.cs` | `SamplePlugin.Commands.HelloCommand`. **The whole integration**: the `ProductSlug` constant, `Gate.Validate(ProductSlug)` as the first statement, the blocked dialog (`gate.GetMessage(language)` + `Gate.OpenConnector()` link + `Result.Cancelled`), and the licensed greeting. ([source](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/Commands/HelloCommand.cs)) |
-| `src/SamplePlugin/SamplePlugin.addin` | Revit manifest. Deployed to `%ProgramData%\Autodesk\Revit\Addins\<year>\SamplePlugin.addin` with `<Assembly>SamplePlugin\SamplePlugin.dll`. ([source](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/SamplePlugin.addin)) |
-| `scripts/release.ps1` | Release pipeline (mirrors the connector's): build → stage → zip + sha256 per compatibility group (`-RevitYear` accepts `2023-2024` / `2025-2026` / `2027` or a single year), optional Inno Setup .exe via `installer.iss`. Invoke per group: `powershell -ExecutionPolicy Bypass -File scripts/release.ps1 -Version 0.2.0 -RevitYear 2025-2026` (`-Version` is required and must match the csproj). |
-| `scripts/installer.iss` (+ `installer-after*.txt`) | Inno Setup 6 script: one Setup.exe per Revit compatibility group, shared `AppId` (user-supplied), a Revit-version dropdown in the wizard (install and uninstall; only shown when there is a choice), per-year manifest generated in `[Code]`. Compiled by `release.ps1` when ISCC.exe is present. |
+| `src/SamplePlugin/SamplePlugin.addin` | Revit manifest with relative `<Assembly>SamplePlugin.dll</Assembly>`. Packaging copies it next to the DLL in each `Contents\<group>\` folder of `SamplePlugin.bundle`. ([source](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/SamplePlugin.addin)) |
+| `scripts/release.ps1` | Release pipeline (mirrors the connector's): builds the three compatibility groups (floor years 2023 / 2025 / 2027), stages one `SamplePlugin.bundle` (`PackageContents.xml` + `Contents\<group>\`), zips it with a sha256, and compiles the single Setup.exe via `installer.iss` when ISCC.exe is present. `powershell -ExecutionPolicy Bypass -File scripts/release.ps1 -Version 0.3.0 [-Install]` (`-Version` is required and must match the csproj; `-Install` copies the bundle to `%ProgramData%\Autodesk\ApplicationPlugins\`). |
+| `scripts/installer.iss` (+ `installer-after*.txt`) | Inno Setup 6 script: one Setup.exe for Revit 2023–2027, one Apps entry (`AppId` kept from the per-group installers). One checkbox per Revit year (installed years start checked, a re-run starts from the previous choice; silent: `/RevitYears=2025,2026`); copies only the checked groups' builds and writes `PackageContents.xml` in `[Code]`. Removes the old per-group installs (`Addins\<year>\SamplePlugin*`) first. Must stay plain ASCII. |
 | `src/SamplePlugin/bin/`, `src/SamplePlugin/obj/` | Per-year build output (`bin\<year>\…`). Git-ignored; never edit, never commit. |
 | `API.md` | The integration contract: connector surface, message taxonomy, ribbon/threading/build rules. Verified against revit-connector@7366482. Section titles are stable — cross-reference them by title. |
 | `README.md` | Human-facing overview and onboarding guide. |
@@ -86,7 +86,7 @@ Use these exact values and names everywhere — docs, code, dialogs, commits. Ne
 | Ribbon panel (this plugin's) | `Sample Plugin` |
 | Ribbon button | `Hello World` |
 | Recommended ribbon pattern | Local idempotent dedup replica + AdWindows hooks (`ApplicationInitialized`, `UIElementActivated`, `-=` before `+=`). The connector's public `DeduplicateRibbonTabs`/`CleanRogueRibbonElements` are documented **OPTIONAL helpers** with a JIT-load tradeoff — calling them pulls `NodeAec.Connector` into your process at ribbon time. |
-| Packaging | `SamplePlugin.addin` at the `Addins\<year>\` **root**, relative `<Assembly>` `SamplePlugin\SamplePlugin.dll` → `Addins\<year>\SamplePlugin\SamplePlugin.dll` |
+| Packaging | One bundle `%ProgramData%\Autodesk\ApplicationPlugins\SamplePlugin.bundle\`: `PackageContents.xml` (one component per Revit year) + `Contents\<group>\SamplePlugin.addin` with relative `<Assembly>SamplePlugin.dll</Assembly>` |
 | Build | SDK-style csproj; `-p:RevitYear=2023..2027` → `net48` / `net8.0-windows` / `net10.0-windows` (default `2026`); `NodeAec.Licensing.Lite` via NuGet restore |
 | `Snapshot` members | `IsLicensed`, `Reason`, `GetMessage(MessageLanguage)`, `Message` (Portuguese), `LicenseType`, `LicenseKey`, `ProductName`, `ExpiresAt` — payload fields `null` on failure; **only** branch point is `IsLicensed` |
 | Failure UX | `gate.GetMessage(language)` verbatim as the dialog content + `Gate.OpenConnector()` command link + `Result.Cancelled` (fail-closed, never proceed unlicensed) |
@@ -132,8 +132,8 @@ Do not invent a unit-test harness that mocks the gate — its contract is
 "never throws, fail closed" (tested in the Lite repository), and it is proven by build + manual run in a real Revit
 session:
 
-1. Install the connector for the target year; deploy `SamplePlugin.addin` +
-   `SamplePlugin\SamplePlugin.dll` to `Addins\<year>\`.
+1. Install the connector for the target year; install the sample with its Setup.exe
+   (or `scripts/release.ps1 -Version <x.y.z> -Install`).
 2. Licensed run → greeting dialog with product, type and expiry (no license key), `Result.Succeeded`.
 3. Unlicensed runs (no lease / wrong slug / cleared lease) → blocked dialog showing the
    gate message verbatim, in Revit's UI language, `Open Node.aec Connector...` link, `Result.Cancelled`.
@@ -214,8 +214,8 @@ copy the Hub DLL — Lite compiles in and travels with your payload), declare on
 entry of every command, branch only on `IsLicensed`, render `gate.GetMessage(language)` verbatim with
 an `OpenConnector()` link + `Result.Cancelled` on failure, add panel `Sample Plugin`
 with button `Hello World` to the shared `Node.aec` tab using the local idempotent
-replica + AdWindows hooks, ship the manifest at `Addins\<year>\` root with a relative
-`Assembly`, and build the `RevitYear` matrix.
+replica + AdWindows hooks, ship one `.bundle` whose `Contents\<group>\` manifests use a
+relative `Assembly`, and build the `RevitYear` matrix.
 
 ---
 
@@ -245,7 +245,8 @@ Checklist (order matters):
    `BitmapCacheOption.OnLoad` + `Freeze()`.
 6. **Build/packaging:** keep the `RevitYear` matrix; the Lite `PackageReference` is the
    whole dependency (nothing else to reference, copy, or wire);
-   manifest at `Addins\<year>\` root, DLL in your subfolder; `release/`/`stage/`
+   one bundle with a `Contents\<group>\` folder per group; give the scripts your own
+   `PluginName`, `AppId`, `ProductCode` and `UpgradeCode` (fresh GUIDs); `release/`/`stage/`
    hold your payload + Lite, never `RevitAPI*`/`AdWindows`/Hub DLL.
 7. **Validate:** build the matrix (§5), then run the manual protocol (§5) in a real Revit
    session — including the Hub-absent and add-in-reload (no ghost tab) cases.

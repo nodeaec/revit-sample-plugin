@@ -1,181 +1,182 @@
 ; Sample Plugin - Inno Setup installer script (requires Inno Setup 6).
 ;
-; ONE Setup.exe == ONE compatibility group of Revit years. Compiled automatically
-; by scripts/release.ps1:
-;   ISCC.exe /DAppVersion=0.1 /DAppVersionNum=0.1.0
-;            /DGroupLabel=2023-2024 /DRevitYears=2023,2024
-;            /DAppId={a61b450f-4226-4edc-ad8d-42613b1555a5}
-;            /DPayloadStage=<abs path>\release\stage\SamplePlugin
+; ONE Setup.exe for every supported Revit year (2023-2027). Compiled by
+; scripts/release.ps1:
+;   ISCC.exe /DAppVersion=0.3.0 /DAppVersionNum=0.3.0
+;            /DPayloadStage=<abs path>\release\stage\SamplePlugin.bundle
 ;            /O<abs path>\release scripts\installer.iss
 ;
-; Result: SamplePlugin-<version>-R<GroupLabel>-Setup.exe - double-click
-; installer for non-technical users. During the wizard the user picks the Revit
-; version from a dropdown listing the years of the group installed on the
-; machine (plus "all installed versions", the default). The payload is copied
-; into %ProgramData%\Autodesk\Revit\Addins\<year>\SamplePlugin\ for the
-; selected year(s), each with its own .addin manifest with an absolute Assembly
-; path. When no year of the group is installed, Setup aborts before touching
-; any file. Silent installs skip the dropdown and install into every installed
-; year of the group; pass /RevitYear=<year> to target one year in silence.
+; Result: SamplePlugin-<version>-Setup.exe. It installs an Autodesk bundle:
 ;
-; AppId note: unlike the connector (one AppId per year), this sample ships a
-; single user-supplied AppId shared by ALL groups, so Windows Settings > Apps
-; shows ONE entry ("Sample Plugin") and each group's Setup upgrades it in
-; place. The uninstaller therefore lists every supported Revit year where the
-; add-in is present (2023..2027) and "remove all versions" removes the payload
-; from all of them.
+;   %ProgramData%\Autodesk\ApplicationPlugins\SamplePlugin.bundle\
+;     PackageContents.xml        written by this script: one component per checked year
+;     Contents\2023-2024\        net48 build      (only when 2023 or 2024 is checked)
+;     Contents\2025-2026\        net8 build       (only when 2025 or 2026 is checked)
+;     Contents\2027\             net10 build      (only when 2027 is checked)
 ;
-; Rerun behavior: re-running Setup detects the previous install. Yes =
-; uninstall it and close (run Setup again to install). No = upgrade in
-; place. Uninstall is also available in Windows Settings > Apps and in
-; {app}\unins000.exe.
+; Revit loads only the component whose SeriesMin/SeriesMax matches its version,
+; so an unchecked year simply has no component. The wizard shows one checkbox per
+; year; installed Revit years start checked, and a re-run starts from the previous
+; choice. Re-running Setup is how the user adds or removes years. Uninstall removes
+; the whole bundle.
+;
+; Silent installs: /RevitYears=2023,2026 picks the years; without it, the previous
+; choice is kept, or every installed Revit year on a first install.
+;
+; Migration: installs made by the older per-group installers (Windows Settings >
+; Apps entries named "Sample Plugin - Revit <group>", payload in
+; %ProgramData%\Autodesk\Revit\Addins\<year>\) are uninstalled before the bundle is
+; written, so Revit never loads the plugin twice.
+;
+; How Inno Setup runs the [Code] section below (event functions, in order):
+;   InitializeSetup      Setup starts, before any window.
+;   InitializeWizard     wizard pages are built (also runs in silent installs, so the
+;                        year selection is resolved here).
+;   NextButtonClick      each Next click; the year page reads its checkboxes here.
+;   PrepareToInstall     last step before files are copied: the place to refuse
+;                        (Revit open, bad /RevitYears) and to remove old installs.
+;   [Files] copy         each entry's Check: function decides whether it is copied.
+;   CurStepChanged       ssPostInstall: files are in place; PackageContents.xml is
+;                        written here, because it depends on the checked years.
+;   RegisterPreviousData saves the checked years in the uninstall entry, read back by
+;                        GetPreviousData on the next run.
+;   InitializeUninstall  the uninstaller starts.
+;
+; Why the uninstaller lives in %ProgramFiles%\Sample Plugin\Uninstall and not in the
+; bundle: the bundle folder then holds only the bundle's own files, the same ones as the
+; .bundle.zip, so IT can replace it by extracting a newer zip without breaking uninstall.
 ;
 ; NOTE: this file must stay plain ASCII (ISCC reads scripts as ANSI/UTF-8-BOM).
 
 #ifndef AppVersion
-  #error AppVersion is required: compile with /DAppVersion=0.1.0 (same as <Version> in the plugin csproj; release.ps1 passes it).
+  #error AppVersion is required: compile with /DAppVersion=0.3.0 (same as <Version> in the plugin csproj; release.ps1 passes it).
 #endif
 #ifndef AppVersionNum
-  #error AppVersionNum is required: compile with /DAppVersionNum=0.1.0 (numeric x.y.z form of AppVersion).
-#endif
-#ifndef RevitYears
-  #error RevitYears is required: compile with /DRevitYears=2023,2024 (the compatible Revit years of this build).
-#endif
-#ifndef GroupLabel
-  #error GroupLabel is required: compile with /DGroupLabel=2023-2024 (display label of the Revit year group).
-#endif
-#ifndef AppId
-  #error AppId is required: compile with /DAppId={GUID} (release.ps1 always passes it).
+  #error AppVersionNum is required: compile with /DAppVersionNum=0.3.0 (numeric x.y.z form of AppVersion).
 #endif
 #ifndef PayloadStage
-  #define PayloadStage "..\release\stage\SamplePlugin"
+  #define PayloadStage "..\release\stage\SamplePlugin.bundle"
 #endif
 
+; Plugin identity. AppId names the single Windows Settings > Apps entry (the same
+; value the per-group installers used, so the entry is taken over in place).
+; ProductCode/UpgradeCode identify the bundle to Autodesk's loader: keep them in
+; sync with release.ps1.
+#define PluginName "SamplePlugin"
+#define DisplayName "Sample Plugin"
+#define AppIdGuid "a61b450f-4226-4edc-ad8d-42613b1555a5"
+#define ProductCode "{E6D697B0-157B-44DD-B09B-48B0C0DAE14C}"
+#define UpgradeCode "{979CC8B7-666B-446F-8CA1-DC5E9AAED38E}"
+#define ProductUrl "https://nodeaec.com.br/products/revit-sample-plugin"
+
 [Setup]
-; Shared AppId (release.ps1 passes a bare {GUID} via /DAppId); Inno's constant
-; parser needs the literal "{" escaped as "{{".
-AppId={#StringChange(AppId, "{", "{{")}
-AppName=Sample Plugin - Revit {#GroupLabel}
+; Inno's constant parser needs the literal "{" escaped as "{{".
+AppId={{{#AppIdGuid}}
+AppName={#DisplayName}
 AppVersion={#AppVersion}
+AppVerName={#DisplayName} {#AppVersion}
 AppPublisher=Node.aec
 AppPublisherURL=https://nodeaec.com.br
 AppSupportURL=https://nodeaec.com.br
-AppUpdatesURL=https://nodeaec.com.br/products/revit-sample-plugin
+AppUpdatesURL={#ProductUrl}
 VersionInfoVersion={#AppVersionNum}
 VersionInfoProductVersion={#AppVersion}
-VersionInfoProductName=Sample Plugin - Revit {#GroupLabel}
-VersionInfoDescription=Sample Plugin Revit {#GroupLabel} add-in installer
-DefaultDirName={autopf}\Sample Plugin\Revit {#GroupLabel}
-DisableProgramGroupPage=yes
+VersionInfoProductName={#DisplayName}
+VersionInfoDescription={#DisplayName} add-in installer for Autodesk Revit 2023-2027
+DefaultDirName={commonappdata}\Autodesk\ApplicationPlugins\{#PluginName}.bundle
 DisableDirPage=yes
+UsePreviousAppDir=no
+DisableProgramGroupPage=yes
+; Keep the uninstaller out of the bundle folder Revit scans.
+UninstallFilesDir={commonpf}\{#DisplayName}\Uninstall
+UninstallDisplayName={#DisplayName}
 PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
 Compression=lzma2/max
 SolidCompression=yes
-OutputBaseFilename=SamplePlugin-{#AppVersion}-R{#GroupLabel}-Setup
+OutputBaseFilename={#PluginName}-{#AppVersion}-Setup
 InfoAfterFile=installer-after.txt
 
 [Languages]
 Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
-; All user-facing custom strings, localized and scoped to this Revit year group.
-; Code reads them with CustomMessage('Name'), which follows the wizard language.
+; All user-facing custom strings. Code reads them with CustomMessage('Name'),
+; which follows the wizard language.
 [CustomMessages]
-brazilianportuguese.YearPageCaption=Versao do Autodesk Revit
-english.YearPageCaption=Autodesk Revit version
-brazilianportuguese.YearPageDesc=Escolha para qual versao do Revit o add-in sera instalado. Apenas versoes instaladas neste computador aparecem na lista.
-english.YearPageDesc=Choose which Revit version to install the add-in for. Only versions installed on this computer are listed.
-brazilianportuguese.YearAllOption=Todas as versoes instaladas (%1)
-english.YearAllOption=All installed versions (%1)
-brazilianportuguese.YearNotAvailable=A versao %1 do Autodesk Revit nao esta disponivel neste computador.%n%nVersoes disponiveis: %2.%nNenhum arquivo foi alterado.
-english.YearNotAvailable=Autodesk Revit %1 is not available on this computer.%n%nAvailable versions: %2.%nNo files were changed.
-brazilianportuguese.UninstallYearCaption=Desinstalar o Sample Plugin
-english.UninstallYearCaption=Uninstall Sample Plugin
-brazilianportuguese.UninstallYearPick=Remover o add-in de qual versao do Revit?
-english.UninstallYearPick=Remove the add-in from which Revit version?
-brazilianportuguese.UninstallAllOption=Remover de todas as versoes (%1)
-english.UninstallAllOption=Remove from all versions (%1)
-brazilianportuguese.UninstallYearRemoved=O add-in foi removido do Revit %1.%n%nPara remover das demais versoes, execute o desinstalador novamente e escolha "Remover de todas as versoes".
-english.UninstallYearRemoved=The add-in was removed from Revit %1.%n%nTo remove it from the other versions, run the uninstaller again and choose "Remove from all versions".
-brazilianportuguese.UninstallOK=OK
-english.UninstallOK=OK
-brazilianportuguese.UninstallCancel=Cancelar
-english.UninstallCancel=Cancel
-brazilianportuguese.PreviousFound=Uma instalacao anterior do Sample Plugin (Revit {#GroupLabel}) foi encontrada.%n%nSim = desinstalar a versao anterior e fechar o instalador.%n(Depois, execute o instalador novamente para instalar.)%nNao = atualizar por cima, sem desinstalar.%nCancelar = sair sem alterar nada.
-english.PreviousFound=A previous Sample Plugin install (Revit {#GroupLabel}) was found.%n%nYes = uninstall the previous version and close Setup.%n(Then run Setup again to install.)%nNo = upgrade in place without uninstalling.%nCancel = exit without changing anything.
-brazilianportuguese.UninstalledDone=A versao anterior foi desinstalada. Execute o instalador novamente para instalar a nova versao.
-english.UninstalledDone=The previous version was uninstalled. Run Setup again to install the new version.
+brazilianportuguese.YearPageCaption=Versoes do Autodesk Revit
+english.YearPageCaption=Autodesk Revit versions
+brazilianportuguese.YearPageDesc=Marque as versoes do Revit em que o {#DisplayName} deve ser carregado.
+english.YearPageDesc=Check the Revit versions that should load {#DisplayName}.
+brazilianportuguese.YearPageHint=Para mudar depois, execute este instalador de novo. Versoes nao instaladas podem ser marcadas para quando o Revit for instalado.
+english.YearPageHint=To change this later, run this installer again. Versions that are not installed can be checked for when Revit is installed later.
+brazilianportuguese.YearInstalled=instalado
+english.YearInstalled=installed
+brazilianportuguese.YearNotInstalled=nao instalado
+english.YearNotInstalled=not installed
+brazilianportuguese.YearNoneChecked=Marque pelo menos uma versao do Revit.
+english.YearNoneChecked=Check at least one Revit version.
+brazilianportuguese.LegacyFound=A instalacao anterior do {#DisplayName} (por versao do Revit) sera removida e substituida por esta.
+english.LegacyFound=The previous {#DisplayName} install (per Revit version) will be removed and replaced by this one.
+brazilianportuguese.SilentNoYears=Nenhuma versao do Revit foi informada nem encontrada neste computador. Use /RevitYears=2025,2026.
+english.SilentNoYears=No Revit version was given or found on this computer. Use /RevitYears=2025,2026.
+brazilianportuguese.SilentBadYears=Versoes do Revit invalidas em /RevitYears: %1. Use anos entre 2023 e 2027, separados por virgula.
+english.SilentBadYears=Invalid Revit versions in /RevitYears: %1. Use years from 2023 to 2027, separated by commas.
 brazilianportuguese.RevitMustClose=Feche o Autodesk Revit antes de continuar.%nO instalador precisa substituir os arquivos do add-in, que estao em uso.
 english.RevitMustClose=Close Autodesk Revit before continuing.%nSetup needs to replace the add-in files, which are in use.
 brazilianportuguese.RevitMustCloseUninstall=Feche o Autodesk Revit antes de desinstalar.%nO desinstalador precisa remover os arquivos do add-in, que estao em uso.
 english.RevitMustCloseUninstall=Close Autodesk Revit before uninstalling.%nThe uninstaller needs to remove the add-in files, which are in use.
-brazilianportuguese.RevitGroupMissing=Nenhum Autodesk Revit compativel foi encontrado neste computador (versoes: %1).%n%nInstale o Autodesk Revit %1 ou execute o instalador correspondente a outro grupo de versoes.%nNenhum arquivo foi alterado.
-english.RevitGroupMissing=No compatible Autodesk Revit installation was found on this computer (versions: %1).%n%nInstall Autodesk Revit %1 or run the installer for another Revit version group.%nNo files were changed.
-brazilianportuguese.CopyFailed=Nao foi possivel substituir os arquivos do add-in. Feche o Autodesk Revit e execute o instalador novamente.
-english.CopyFailed=Could not replace the add-in files. Close Autodesk Revit and run Setup again.
+brazilianportuguese.LegacyRemoveFailed=Nao foi possivel remover a instalacao anterior do {#DisplayName} em %1.%nFeche o Autodesk Revit e execute o instalador novamente.
+english.LegacyRemoveFailed=Could not remove the previous {#DisplayName} install in %1.%nClose Autodesk Revit and run Setup again.
+brazilianportuguese.WriteFailed=Nao foi possivel gravar o arquivo PackageContents.xml do add-in. Execute o instalador novamente.
+english.WriteFailed=Could not write the add-in's PackageContents.xml. Run Setup again.
 brazilianportuguese.FinishFailedHeading=A instalacao nao foi concluida
 english.FinishFailedHeading=Setup did not finish
-brazilianportuguese.FinishFailedText=Alguns arquivos nao puderam ser atualizados (talvez o Revit estivesse aberto).%nFeche o Autodesk Revit e execute o instalador novamente.
-english.FinishFailedText=Some files could not be updated (Revit may have been open).%nClose Autodesk Revit and run Setup again.
-brazilianportuguese.AfterText=Instalacao concluida!%n%nAbra o Autodesk Revit, clique na aba "Node.aec" e depois no botao "Hello World" do painel "Sample Plugin".%n%nO comando verifica sua licenca no Node.aec Connector antes de executar.
-english.AfterText=Installation finished!%n%nOpen Autodesk Revit, click the "Node.aec" tab and then the "Hello World" button in the "Sample Plugin" panel.%n%nThe command checks your license with the Node.aec Connector before running.
+brazilianportuguese.FinishFailedText=O add-in nao foi configurado para o Revit. Execute o instalador novamente.
+english.FinishFailedText=The add-in was not set up for Revit. Run Setup again.
+brazilianportuguese.AfterText=Instalacao concluida!%n%nAbra o Autodesk Revit, clique na aba "Node.aec" e depois no botao "Hello World" do painel "{#DisplayName}".%n%nO comando verifica sua licenca localmente (sem rede) antes de executar.
+english.AfterText=Installation finished!%n%nOpen Autodesk Revit, click the "Node.aec" tab and then the "Hello World" button in the "{#DisplayName}" panel.%n%nThe command verifies your license locally (no network call) before running.
 
-; Payload staged by release.ps1 (plugin DLL, .deps.json, README).
-; The staged .addin is excluded: the per-year manifest is generated in [Code].
+; One payload per compatibility group, installed only when one of its years is
+; checked. PackageContents.xml is not copied: [Code] writes it for the checked years.
 [Files]
-Source: "{#PayloadStage}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion; Excludes: "*.addin"
-
-; Post-install notes per language (embedded; ssDone loads the one
-; matching the wizard language into the InfoAfter page).
+Source: "{#PayloadStage}\Contents\2023-2024\*"; DestDir: "{app}\Contents\2023-2024"; Flags: recursesubdirs createallsubdirs ignoreversion; Check: GroupSelected('2023-2024')
+Source: "{#PayloadStage}\Contents\2025-2026\*"; DestDir: "{app}\Contents\2025-2026"; Flags: recursesubdirs createallsubdirs ignoreversion; Check: GroupSelected('2025-2026')
+Source: "{#PayloadStage}\Contents\2027\*"; DestDir: "{app}\Contents\2027"; Flags: recursesubdirs createallsubdirs ignoreversion; Check: GroupSelected('2027')
+Source: "{#PayloadStage}\README.md"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+; Post-install notes per language (embedded; the InfoAfter page loads the one
+; matching the wizard language).
 Source: "installer-after.txt"; Flags: dontcopy
 Source: "installer-after-en.txt"; Flags: dontcopy
 
+[UninstallDelete]
+Type: files; Name: "{app}\PackageContents.xml"
+Type: filesandordirs; Name: "{app}\Contents"
+Type: dirifempty; Name: "{app}"
+
 [Code]
 const
-  // Revit add-in identity of the Sample Plugin (matches
-  // src/SamplePlugin/SamplePlugin.addin; never reuse another add-in's GUID).
-  SampleAddInId = 'B6BD6575-DBB6-412A-A5EA-0843ABE8D9B6';
-  // Compatible Revit years of this build, fixed at compile time by
-  // /DRevitYears=2023,2024 (release.ps1 passes the group's years).
-  SupportedYearsCsv = '{#RevitYears}';
-  // Every Revit year this project supports. The AppId is shared by every
-  // group, so uninstall lists/cleans the payload of all of them.
-  AllProjectYearsCsv = '2023,2024,2025,2026,2027';
+  FirstYear = 2023;
+  LastYear = 2027;
   // Revit installation root. Revit's default layout is
-  // "C:\Program Files\Autodesk\Revit <year>" (space); some deployments use
-  // "C:\Program Files\Autodesk\Revit\<year>". Both layouts are accepted.
+  // "C:\Program Files\Autodesk\Revit <year>"; some deployments use
+  // "C:\Program Files\Autodesk\Revit\<year>". Both are accepted.
   AutodeskRoot = 'C:\Program Files\Autodesk';
-  // This install's uninstall key. release.ps1 passes the shared AppId
-  // via /DAppId; Inno writes the uninstall entry under "{GUID}_is1".
-  UninstallKey = '{#AppId}_is1';
-  AddInTemplate =
-    '<?xml version="1.0" encoding="utf-8"?>' + #13#10 +
-    '<RevitAddIns>' + #13#10 +
-    '  <AddIn Type="Application">' + #13#10 +
-    '    <Name>Sample Plugin</Name>' + #13#10 +
-    '    <Assembly>%s</Assembly>' + #13#10 +
-    '    <AddInId>' + SampleAddInId + '</AddInId>' + #13#10 +
-    '    <FullClassName>SamplePlugin.App</FullClassName>' + #13#10 +
-    '    <VendorId>NODEAEC</VendorId>' + #13#10 +
-    '    <VendorDescription>Node.aec - https://nodeaec.com.br</VendorDescription>' + #13#10 +
-    '  </AddIn>' + #13#10 +
-    '</RevitAddIns>' + #13#10;
+  UninstallRoot = 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall';
+  LegacyNamePrefix = '{#DisplayName} - Revit';
 
 var
   InstallFailed: Boolean;
-  // Years the post-install copy writes to: the dropdown choice, the
-  // /RevitYear switch, or every installed supported year when nothing is
-  // chosen (silent installs).
-  TargetYears: TArrayOfString;
-  // Install-side year chooser: page + dropdown created in InitializeWizard.
-  // YearChoices holds the installed supported years; the combo box gets one
-  // entry per year plus a trailing "all installed versions" entry.
   YearPage: TWizardPage;
-  YearCombo: TNewComboBox;
-  YearChoices: TArrayOfString;
+  YearList: TNewCheckListBox;
+  // Checked state per year, index 0 = FirstYear. Filled from the wizard page,
+  // or from /RevitYears / the previous choice in silent installs.
+  Selected: array of Boolean;
+  // Set in InitializeWizard when a silent run has no usable year selection;
+  // PrepareToInstall returns it so Setup aborts before touching any file.
+  SilentError: string;
 
 // Splits Text on Sep into Items, in order. Empty segments are dropped.
 procedure SplitText(const Text, Sep: string; var Items: TArrayOfString);
@@ -198,6 +199,7 @@ begin
       Piece := Copy(Rest, 1, P - 1);
       Delete(Rest, 1, P - 1 + Length(Sep));
     end;
+    Piece := Trim(Piece);
     if Piece <> '' then
     begin
       N := GetArrayLength(Items);
@@ -207,24 +209,32 @@ begin
   end;
 end;
 
-// Revit years this Setup supports, in order (2023,2024 / 2025,2026 / 2027).
-procedure SupportedYears(var Years: TArrayOfString);
+function YearCount(): Integer;
 begin
-  SplitText(SupportedYearsCsv, ',', Years);
+  Result := LastYear - FirstYear + 1;
 end;
 
-// True when Year is a Revit year this project knows how to target.
-function IsKnownRevitYear(const Year: string): Boolean;
+function YearText(Index: Integer): string;
 begin
-  Result :=
-    (Year = '2023') or (Year = '2024') or (Year = '2025') or
-    (Year = '2026') or (Year = '2027');
+  Result := IntToStr(FirstYear + Index);
 end;
 
-// True when Revit Year is installed. Accepts the default install folders
-// ("Revit <year>" and "Revit\<year>") and the Autodesk registry signal
-// ("SOFTWARE\Autodesk\Revit\<year>"), so a non-default install folder does not
-// cause a false negative.
+// Compatibility group whose build loads in the given Revit year.
+function GroupOfYear(Index: Integer): string;
+var
+  Year: Integer;
+begin
+  Year := FirstYear + Index;
+  if Year <= 2024 then
+    Result := '2023-2024'
+  else if Year <= 2026 then
+    Result := '2025-2026'
+  else
+    Result := '2027';
+end;
+
+// True when Revit of the given year is installed: default folders or the
+// Autodesk registry keys (so a non-default install folder is still found).
 function IsRevitYearInstalled(const Year: string): Boolean;
 var
   InstallLocation: string;
@@ -237,204 +247,179 @@ begin
     RegQueryStringValue(HKLM64, 'SOFTWARE\Autodesk\Revit\Autodesk Revit ' + Year, 'InstallLocation', InstallLocation);
 end;
 
-// Supported years of this build that are installed on this machine.
-procedure InstalledSupportedYears(var Years: TArrayOfString);
+// Fills Selected from a comma-separated year list. Returns '' or the invalid entries.
+function SelectFromCsv(const Csv: string): string;
 var
-  All: TArrayOfString;
-  I, N: Integer;
-begin
-  SetArrayLength(Years, 0);
-  SupportedYears(All);
-  for I := 0 to GetArrayLength(All) - 1 do
-    if IsRevitYearInstalled(All[I]) then
-    begin
-      N := GetArrayLength(Years);
-      SetArrayLength(Years, N + 1);
-      Years[N] := All[I];
-    end;
-end;
-
-// Years joined for display, e.g. '2023 / 2024'.
-function YearsDisplayList(var Years: TArrayOfString): string;
-var
-  I: Integer;
+  Items: TArrayOfString;
+  I, Year: Integer;
 begin
   Result := '';
-  for I := 0 to GetArrayLength(Years) - 1 do
+  for I := 0 to YearCount() - 1 do
+    Selected[I] := False;
+  SplitText(Csv, ',', Items);
+  for I := 0 to GetArrayLength(Items) - 1 do
   begin
-    if Result <> '' then
-      Result := Result + ' / ';
-    Result := Result + Years[I];
+    Year := StrToIntDef(Items[I], 0);
+    if (Year >= FirstYear) and (Year <= LastYear) then
+      Selected[Year - FirstYear] := True
+    else
+    begin
+      if Result <> '' then
+        Result := Result + ', ';
+      Result := Result + Items[I];
+    end;
   end;
 end;
 
-// Guard against a Setup compiled with a typo'd /DRevitYears (release.ps1
-// validates the group, so this only protects direct ISCC invocations).
-function SupportedYearsAreValid(): Boolean;
+// Default choice: the years saved by the previous install, or every installed year.
+procedure SelectDefaults();
 var
-  Years: TArrayOfString;
+  Previous: string;
   I: Integer;
 begin
-  SupportedYears(Years);
-  Result := GetArrayLength(Years) > 0;
-  if not Result then
-    Exit;
-  for I := 0 to GetArrayLength(Years) - 1 do
-    if not IsKnownRevitYear(Years[I]) then
-    begin
-      Result := False;
-      Exit;
-    end;
-end;
-
-// Fills the install-side dropdown: one entry per installed supported year plus
-// a trailing "all installed versions" entry (the default). A /RevitYear=<year>
-// switch preselects that year when it is available.
-procedure BuildYearChooser();
-var
-  Installed: TArrayOfString;
-  ParamYear: string;
-  I, N: Integer;
-begin
-  InstalledSupportedYears(Installed);
-  YearChoices := Installed;
-  N := GetArrayLength(YearChoices);
-  YearCombo.Items.Clear;
-  for I := 0 to N - 1 do
-    YearCombo.Items.Add(YearChoices[I]);
-  YearCombo.Items.Add(FmtMessage(CustomMessage('YearAllOption'), [YearsDisplayList(YearChoices)]));
-  YearCombo.ItemIndex := N;
-  ParamYear := ExpandConstant('{param:RevitYear|}');
-  if ParamYear <> '' then
-    for I := 0 to N - 1 do
-      if YearChoices[I] = ParamYear then
-        YearCombo.ItemIndex := I;
-end;
-
-// Resolves the year selection into TargetYears. Returns '' on success or the
-// user-facing error message when /RevitYear names a year that is not installed.
-// Silent installs default to every installed year of the group.
-function ResolveTargetYears(): String;
-var
-  Installed: TArrayOfString;
-  ParamYear: string;
-  I: Integer;
-  Found: Boolean;
-begin
-  Result := '';
-  InstalledSupportedYears(Installed);
-  SetArrayLength(TargetYears, 0);
-  if WizardSilent() then
-  begin
-    ParamYear := ExpandConstant('{param:RevitYear|}');
-    if ParamYear = '' then
-      TargetYears := Installed
-    else
-    begin
-      Found := False;
-      for I := 0 to GetArrayLength(Installed) - 1 do
-        if Installed[I] = ParamYear then
-          Found := True;
-      if not Found then
-      begin
-        Result := FmtMessage(CustomMessage('YearNotAvailable'), [ParamYear, YearsDisplayList(Installed)]);
-        Exit;
-      end;
-      SetArrayLength(TargetYears, 1);
-      TargetYears[0] := ParamYear;
-    end;
-  end
+  Previous := GetPreviousData('RevitYears', '');
+  if Previous <> '' then
+    SelectFromCsv(Previous)
   else
-  begin
-    // Index = number of installed years means the trailing "all" entry.
-    if (YearCombo.ItemIndex < 0) or (YearCombo.ItemIndex >= GetArrayLength(YearChoices)) then
-      TargetYears := Installed
-    else
+    for I := 0 to YearCount() - 1 do
+      Selected[I] := IsRevitYearInstalled(YearText(I));
+end;
+
+function AnySelected(): Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  for I := 0 to YearCount() - 1 do
+    if Selected[I] then
+      Result := True;
+end;
+
+function SelectedCsv(): string;
+var
+  I: Integer;
+begin
+  Result := '';
+  for I := 0 to YearCount() - 1 do
+    if Selected[I] then
     begin
-      SetArrayLength(TargetYears, 1);
-      TargetYears[0] := YearChoices[YearCombo.ItemIndex];
+      if Result <> '' then
+        Result := Result + ',';
+      Result := Result + YearText(I);
     end;
+end;
+
+// [Files] Check: copy a group's build only when one of its years is checked.
+function GroupSelected(const Group: string): Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  for I := 0 to YearCount() - 1 do
+    if Selected[I] and (GroupOfYear(I) = Group) then
+      Result := True;
+end;
+
+// Uninstall entries left by the per-group installers.
+procedure LegacyUninstallKeys(const RootKey: Integer; var Keys: TArrayOfString);
+var
+  Names: TArrayOfString;
+  DisplayName: string;
+  I, N: Integer;
+begin
+  SetArrayLength(Keys, 0);
+  if not RegGetSubkeyNames(RootKey, UninstallRoot, Names) then
+    Exit;
+  for I := 0 to GetArrayLength(Names) - 1 do
+    if RegQueryStringValue(RootKey, UninstallRoot + '\' + Names[I], 'DisplayName', DisplayName) and
+       (Pos(LegacyNamePrefix, DisplayName) = 1) then
+    begin
+      N := GetArrayLength(Keys);
+      SetArrayLength(Keys, N + 1);
+      Keys[N] := UninstallRoot + '\' + Names[I];
+    end;
+end;
+
+function LegacyAddinExists(): Boolean;
+var
+  I: Integer;
+  Base: string;
+begin
+  Result := False;
+  for I := 0 to YearCount() - 1 do
+  begin
+    Base := ExpandConstant('{commonappdata}\Autodesk\Revit\Addins\') + YearText(I);
+    if FileExists(Base + '\{#PluginName}.addin') or DirExists(Base + '\{#PluginName}') then
+      Result := True;
   end;
 end;
 
-// Adds the "Revit version" wizard page with its year dropdown. The page is
-// skipped (ShouldSkipPage) when there is nothing to choose.
-procedure InitializeWizard();
+function LegacyInstallExists(): Boolean;
+var
+  Keys64, Keys32: TArrayOfString;
 begin
-  YearPage := CreateCustomPage(wpSelectTasks, CustomMessage('YearPageCaption'), CustomMessage('YearPageDesc'));
-  YearCombo := TNewComboBox.Create(YearPage);
-  YearCombo.Parent := YearPage.Surface;
-  YearCombo.Left := 0;
-  YearCombo.Top := ScaleY(12);
-  YearCombo.Width := YearPage.SurfaceWidth;
-  YearCombo.Style := csDropDownList;
-  BuildYearChooser();
+  LegacyUninstallKeys(HKLM64, Keys64);
+  LegacyUninstallKeys(HKLM32, Keys32);
+  Result := (GetArrayLength(Keys64) > 0) or (GetArrayLength(Keys32) > 0) or LegacyAddinExists();
 end;
 
-// Recursively copies SrcDir into DstDir. Returns the number of copy failures
-// (locked files, e.g. Revit running with the DLL loaded).
-function CopyDirTree(const SrcDir, DstDir: string): Integer;
+// Runs each legacy uninstaller silently. Inno uninstallers relaunch themselves
+// from a temp copy and return at once, so wait until the entry disappears.
+procedure RunLegacyUninstallers(const RootKey: Integer);
 var
-  FindRec: TFindRec;
-  Src, Dst: string;
+  Keys: TArrayOfString;
+  Command: string;
+  I, Waited, ExecCode: Integer;
 begin
-  Result := 0;
-  ForceDirectories(DstDir);
-  if FindFirst(SrcDir + '\*', FindRec) then
-  try
-    repeat
-      if (FindRec.Name <> '.') and (FindRec.Name <> '..') then
+  LegacyUninstallKeys(RootKey, Keys);
+  for I := 0 to GetArrayLength(Keys) - 1 do
+    if RegQueryStringValue(RootKey, Keys[I], 'UninstallString', Command) then
+    begin
+      Command := RemoveQuotes(Trim(Command));
+      // An entry whose uninstaller is gone can only fail when clicked in Apps.
+      if not FileExists(Command) then
       begin
-        Src := SrcDir + '\' + FindRec.Name;
-        Dst := DstDir + '\' + FindRec.Name;
-        if DirExists(Src) then
-          Result := Result + CopyDirTree(Src, Dst)
-        // The Setup uninstaller lives in {app} too (unins000.*, unins001.*,
-        // ...); never propagate it into the Revit add-in folders.
-        // FailIfExists=False overwrites the destination, which upgrades
-        // and reinstalls require.
-        else if CompareText(Copy(FindRec.Name, 1, 5), 'unins') <> 0 then
-          if not CopyFile(Src, Dst, False) then
-            Result := Result + 1;
+        Log('Deleting orphan legacy entry (uninstaller missing): ' + Keys[I]);
+        RegDeleteKeyIncludingSubkeys(RootKey, Keys[I]);
+        Continue;
       end;
-    until not FindNext(FindRec);
-  finally
-    FindClose(FindRec);
-  end;
+      Log('Removing legacy install: ' + Keys[I]);
+      if Exec(Command, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '', SW_HIDE, ewWaitUntilTerminated, ExecCode) then
+      begin
+        Waited := 0;
+        while RegKeyExists(RootKey, Keys[I]) and (Waited < 60000) do
+        begin
+          Sleep(500);
+          Waited := Waited + 500;
+        end;
+      end;
+    end;
 end;
 
-// Deletes stray Setup uninstaller files (unins*.*) from a directory.
-// Harmless when none exist.
-procedure DeleteUninstallerStrays(const Dir: string);
+// Removes everything the per-group installers left: their uninstall entries and,
+// as a safety net, the per-year payloads. Returns '' or the folder that failed.
+function RemoveLegacyInstalls(): string;
 var
-  FindRec: TFindRec;
-  Path: string;
+  I: Integer;
+  Base: string;
 begin
-  if FindFirst(Dir + '\unins*', FindRec) then
-  try
-    repeat
-      Path := Dir + '\' + FindRec.Name;
-      if (FindRec.Name <> '.') and (FindRec.Name <> '..') and not DirExists(Path) then
-        DeleteFile(Path);
-    until not FindNext(FindRec);
-  finally
-    FindClose(FindRec);
+  Result := '';
+  RunLegacyUninstallers(HKLM64);
+  RunLegacyUninstallers(HKLM32);
+  for I := 0 to YearCount() - 1 do
+  begin
+    Base := ExpandConstant('{commonappdata}\Autodesk\Revit\Addins\') + YearText(I);
+    if DirExists(Base + '\{#PluginName}') then
+      DelTree(Base + '\{#PluginName}', True, True, True);
+    if FileExists(Base + '\{#PluginName}.addin') then
+      DeleteFile(Base + '\{#PluginName}.addin');
+    if FileExists(Base + '\{#PluginName}.addin') or DirExists(Base + '\{#PluginName}') then
+      Result := Base;
   end;
-end;
-
-// Writes the per-year .addin manifest with the absolute Assembly path.
-function WriteAddInManifest(const AddinsDir: string): Boolean;
-var
-  AssemblyPath, Xml: string;
-begin
-  AssemblyPath := AddinsDir + '\SamplePlugin\SamplePlugin.dll';
-  Xml := Format(AddInTemplate, [AssemblyPath]);
-  Result := SaveStringToFile(AddinsDir + '\SamplePlugin.addin', Xml, False);
 end;
 
 // True when a process with the given image name is running (WMI lookup).
-// Any lookup failure is treated as "not running" (fail-open for detection;
-// the copy step still reports locked files honestly).
+// A lookup failure counts as "not running"; a locked file still fails the copy.
 function IsProcessRunning(const ProcessName: string): Boolean;
 var
   Locator, Service, Procs: Variant;
@@ -450,127 +435,136 @@ begin
   end;
 end;
 
-// True when the add-in payload folder or .addin manifest exists for Year.
-function HasPayload(const Year: string): Boolean;
+// PackageContents.xml for the checked years: one component per year, pointing
+// at the build of that year's compatibility group.
+function PackageContentsXml(): string;
 var
-  Base: string;
+  I: Integer;
+  Year, Group: string;
 begin
-  Base := ExpandConstant('{commonappdata}\Autodesk\Revit\Addins\' + Year);
-  Result := DirExists(Base + '\SamplePlugin') or FileExists(Base + '\SamplePlugin.addin');
-end;
-
-// Removes the add-in payload folder and .addin manifest of a single year.
-procedure RemoveYearPayload(const Year: string);
-var
-  Base: string;
-begin
-  Base := ExpandConstant('{commonappdata}\Autodesk\Revit\Addins\' + Year);
-  DelTree(Base + '\SamplePlugin', True, True, True);
-  DeleteFile(Base + '\SamplePlugin.addin');
-end;
-
-// Every project year where the add-in is actually present. The shared AppId
-// covers all groups, so this scans the whole matrix, not only this Setup's
-// group.
-procedure YearsWithPayload(var Years: TArrayOfString);
-var
-  All: TArrayOfString;
-  I, N: Integer;
-begin
-  SetArrayLength(Years, 0);
-  SplitText(AllProjectYearsCsv, ',', All);
-  for I := 0 to GetArrayLength(All) - 1 do
-    if HasPayload(All[I]) then
+  Result :=
+    '<?xml version="1.0" encoding="utf-8"?>' + #13#10 +
+    '<ApplicationPackage SchemaVersion="1.0" AutodeskProduct="Revit" ProductType="Application" Name="{#DisplayName}" AppVersion="{#AppVersion}" Description="{#DisplayName} for Autodesk Revit" Author="Node.aec" ProductCode="{#ProductCode}" UpgradeCodes="{#UpgradeCode}" OnlineDocumentation="https://nodeaec.com.br">' + #13#10 +
+    '  <CompanyDetails Name="Node.aec" Url="https://nodeaec.com.br" />' + #13#10;
+  for I := 0 to YearCount() - 1 do
+    if Selected[I] then
     begin
-      N := GetArrayLength(Years);
-      SetArrayLength(Years, N + 1);
-      Years[N] := All[I];
+      Year := YearText(I);
+      Group := GroupOfYear(I);
+      Result := Result +
+        '  <Components Description="Revit ' + Year + '">' + #13#10 +
+        '    <RuntimeRequirements OS="Win64" Platform="Revit" SeriesMin="R' + Year + '" SeriesMax="R' + Year + '" />' + #13#10 +
+        '    <ComponentEntry AppName="{#DisplayName}" Version="{#AppVersion}" ModuleName="./Contents/' + Group + '/{#PluginName}.addin" AppDescription="{#DisplayName} for Revit ' + Year + '" />' + #13#10 +
+        '  </Components>' + #13#10;
     end;
+  Result := Result + '</ApplicationPackage>' + #13#10;
 end;
 
-// Finds the previous install (same shared AppId) uninstall command.
-// Returns True when found.
-function GetPreviousUninstallString(var UninstallString: string): Boolean;
-begin
-  Result := True;
-  if RegQueryStringValue(HKLM64, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\' + UninstallKey, 'UninstallString', UninstallString) then Exit;
-  if RegQueryStringValue(HKLM32, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\' + UninstallKey, 'UninstallString', UninstallString) then Exit;
-  Result := False;
-end;
-
-// Offers uninstall-first when re-running over a previous install.
-// Yes = uninstall the previous version and close (does NOT continue
-// installing; run Setup again to install). No = upgrade in place.
-// Silent installs skip the prompt and upgrade in place.
-// All prompts follow the wizard language via [CustomMessages].
-function InitializeSetup(): Boolean;
+// Resolves the year selection (previous choice, installed years, /RevitYears)
+// and adds the year page: one checkbox per Revit year, installed ones marked.
+// Runs in silent installs too, so the selection logic lives here.
+procedure InitializeWizard();
 var
-  UninstallString, Clean: string;
-  Choice, ExecCode: Integer;
+  I: Integer;
+  State, Bad: string;
+  Hint: TNewStaticText;
+begin
+  SetArrayLength(Selected, YearCount());
+  SelectDefaults();
+  SilentError := '';
+  if WizardSilent() then
+  begin
+    if ExpandConstant('{param:RevitYears|}') <> '' then
+    begin
+      Bad := SelectFromCsv(ExpandConstant('{param:RevitYears|}'));
+      if Bad <> '' then
+        SilentError := FmtMessage(CustomMessage('SilentBadYears'), [Bad]);
+    end;
+    if (SilentError = '') and not AnySelected() then
+      SilentError := CustomMessage('SilentNoYears');
+  end;
+
+  YearPage := CreateCustomPage(wpSelectTasks, CustomMessage('YearPageCaption'), CustomMessage('YearPageDesc'));
+
+  YearList := TNewCheckListBox.Create(YearPage);
+  YearList.Parent := YearPage.Surface;
+  YearList.Left := 0;
+  YearList.Top := 0;
+  YearList.Width := YearPage.SurfaceWidth;
+  YearList.Height := ScaleY(130);
+  for I := 0 to YearCount() - 1 do
+  begin
+    if IsRevitYearInstalled(YearText(I)) then
+      State := CustomMessage('YearInstalled')
+    else
+      State := CustomMessage('YearNotInstalled');
+    YearList.AddCheckBox('Autodesk Revit ' + YearText(I), State, 0, Selected[I], True, False, False, nil);
+  end;
+
+  Hint := TNewStaticText.Create(YearPage);
+  Hint.Parent := YearPage.Surface;
+  Hint.Left := 0;
+  Hint.Top := YearList.Top + YearList.Height + ScaleY(8);
+  Hint.Width := YearPage.SurfaceWidth;
+  Hint.AutoSize := False;
+  Hint.WordWrap := True;
+  Hint.Height := ScaleY(60);
+  Hint.Caption := CustomMessage('YearPageHint');
+  if LegacyInstallExists() then
+    Hint.Caption := Hint.Caption + #13#10#13#10 + CustomMessage('LegacyFound');
+end;
+
+function InitializeSetup(): Boolean;
 begin
   Result := True;
   InstallFailed := False;
-  if not SupportedYearsAreValid() then
-  begin
-    MsgBox('This Setup was compiled with unsupported Revit years (' + SupportedYearsCsv + '). Rebuild it with scripts/release.ps1.', mbError, MB_OK);
-    Result := False;
-    Exit;
-  end;
-  if WizardSilent() then
-    Exit;
-  if not GetPreviousUninstallString(UninstallString) then
-    Exit;
-  Choice := MsgBox(CustomMessage('PreviousFound'), mbConfirmation, MB_YESNOCANCEL);
-  if Choice <> IDYES then
-  begin
-    Result := Choice = IDNO;
-    Exit;
-  end;
-  Clean := RemoveQuotes(Trim(UninstallString));
-  Exec(Clean, '/SILENT /SUPPRESSMSGBOXES', '', SW_SHOW, ewWaitUntilTerminated, ExecCode);
-  MsgBox(CustomMessage('UninstalledDone'), mbInformation, MB_OK);
-  Result := False;
 end;
 
-// Clean pre-flight abort (no files touched, no success page): at least one
-// Revit year of the group must be installed, the year selection must resolve
-// and Revit must be closed before any copy.
+// Reads the checkboxes and refuses to leave the page with nothing checked.
+function NextButtonClick(CurPageID: Integer): Boolean;
+var
+  I: Integer;
+begin
+  Result := True;
+  if (YearPage = nil) or (CurPageID <> YearPage.ID) then
+    Exit;
+  for I := 0 to YearCount() - 1 do
+    Selected[I] := YearList.Checked[I];
+  // Silent runs also "click" Next; their selection was validated in
+  // InitializeWizard, and a message box would block with no user.
+  if (not AnySelected()) and (not WizardSilent()) then
+  begin
+    MsgBox(CustomMessage('YearNoneChecked'), mbError, MB_OK);
+    Result := False;
+  end;
+end;
+
+// Runs before any file is copied: Revit must be closed, and the legacy
+// per-group installs are removed so Revit never loads the plugin twice.
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
-  All: TArrayOfString;
+  Failed: string;
 begin
   NeedsRestart := False;
-  Result := '';
-  InstalledSupportedYears(TargetYears);
-  if GetArrayLength(TargetYears) = 0 then
-  begin
-    SupportedYears(All);
-    Result := FmtMessage(CustomMessage('RevitGroupMissing'), [YearsDisplayList(All)]);
-    Exit;
-  end;
-  Result := ResolveTargetYears();
+  Result := SilentError;
   if Result <> '' then
     Exit;
   if IsProcessRunning('Revit.exe') then
-    Result := CustomMessage('RevitMustClose');
-end;
-
-// The InfoAfter "success" page must not show when the copy step failed; the
-// year chooser is only useful when more than one year can be selected.
-function ShouldSkipPage(PageID: Integer): Boolean;
-var
-  Installed: TArrayOfString;
-begin
-  Result := (PageID = wpInfoAfter) and InstallFailed;
-  if (not Result) and (YearPage <> nil) and (PageID = YearPage.ID) then
   begin
-    InstalledSupportedYears(Installed);
-    Result := GetArrayLength(Installed) <= 1;
+    Result := CustomMessage('RevitMustClose');
+    Exit;
   end;
+  Failed := RemoveLegacyInstalls();
+  if Failed <> '' then
+    Result := FmtMessage(CustomMessage('LegacyRemoveFailed'), [Failed]);
 end;
 
-// Silent/automation runs must not read a failed copy as success: any non-zero
-// code fails the build pipeline, while 0 keeps Inno's normal exit code.
+procedure RegisterPreviousData(PreviousDataKey: Integer);
+begin
+  SetPreviousData(PreviousDataKey, 'RevitYears', SelectedCsv());
+end;
+
+// Silent runs must not read a failed setup as success.
 function GetCustomSetupExitCode: Integer;
 begin
   if InstallFailed then
@@ -579,47 +573,39 @@ begin
     Result := 0;
 end;
 
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := (PageID = wpInfoAfter) and InstallFailed;
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
-  Base: string;
-  Failures, I: Integer;
+  App: string;
 begin
-  if CurStep = ssPostInstall then
+  if CurStep <> ssPostInstall then
+    Exit;
+  App := ExpandConstant('{app}');
+  // A re-run can uncheck every year of a group: drop that group's build.
+  if not GroupSelected('2023-2024') then
+    DelTree(App + '\Contents\2023-2024', True, True, True);
+  if not GroupSelected('2025-2026') then
+    DelTree(App + '\Contents\2025-2026', True, True, True);
+  if not GroupSelected('2027') then
+    DelTree(App + '\Contents\2027', True, True, True);
+  if not SaveStringToFile(App + '\PackageContents.xml', PackageContentsXml(), False) then
   begin
-    Failures := 0;
-    // One payload folder + manifest per selected year.
-    for I := 0 to GetArrayLength(TargetYears) - 1 do
-    begin
-      Base := ExpandConstant('{commonappdata}\Autodesk\Revit\Addins\' + TargetYears[I]);
-      ForceDirectories(Base);
-      Failures := Failures + CopyDirTree(ExpandConstant('{app}'), Base + '\SamplePlugin');
-      if not WriteAddInManifest(Base) then
-        Failures := Failures + 1;
-      // Repair: older installers may have copied the Setup uninstaller
-      // (unins*.*) into the Revit folders; remove those strays.
-      DeleteUninstallerStrays(Base + '\SamplePlugin');
-    end;
-    // NOTE: no RaiseException here on purpose. A raised exception inside
-    // ssPostInstall does not roll back and Setup still reaches ssDone,
-    // which would show the InfoAfter success page. Flag the failure
-    // instead: the success page is skipped and the Finished page reports it.
-    if Failures > 0 then
-    begin
-      InstallFailed := True;
-      // /SUPPRESSMSGBOXES does not cover [Code] MsgBox calls: in a silent run
-      // (no user) the box would block forever. Silent runs are told about the
-      // failure by the log and by GetCustomSetupExitCode instead.
-      if WizardSilent() then
-        Log('Copy failed: some add-in files could not be replaced (locked?).')
-      else
-        MsgBox(CustomMessage('CopyFailed'), mbError, MB_OK);
-    end;
+    // No RaiseException: it would not roll back and Setup would still show the
+    // success page. Flag the failure; the Finished page reports it.
+    InstallFailed := True;
+    if WizardSilent() then
+      Log('Could not write PackageContents.xml.')
+    else
+      MsgBox(CustomMessage('WriteFailed'), mbError, MB_OK);
   end;
 end;
 
-// Runs when a wizard page is shown. The Finished page is where a failed copy
-// must surface: ssDone fires after the wizard is hidden, so setting the
-// captions there has no visible effect.
+// The Finished page reports a failure; the InfoAfter page shows the note in the
+// wizard language.
 procedure CurPageChanged(CurPageID: Integer);
 var
   AfterFile, AfterText: string;
@@ -632,8 +618,6 @@ begin
   end;
   if (CurPageID <> wpInfoAfter) or InstallFailed then
     Exit;
-  // InfoAfterFile is a single static file; load the note matching the
-  // wizard language (CustomMessage AfterText stays as fallback).
   if CompareText(ActiveLanguage(), 'english') = 0 then
     AfterFile := 'installer-after-en.txt'
   else
@@ -649,132 +633,11 @@ begin
   end;
 end;
 
-// Asks from which year the add-in should be removed. Returns True when the
-// complete uninstall should proceed (the user picked "all versions", the only
-// year with payload, or there is nothing to choose). Returns False when the
-// user cancelled, or after removing a single year: the uninstaller then stops
-// before deleting the Apps entry so the remaining years stay manageable.
-function AskUninstallYear(): Boolean;
-var
-  Form: TSetupForm;
-  Prompt: TNewStaticText;
-  Combo: TNewComboBox;
-  OkBtn, CancelBtn: TNewButton;
-  Present: TArrayOfString;
-  I, AllIndex: Integer;
-begin
-  Result := False;
-  YearsWithPayload(Present);
-  if GetArrayLength(Present) <= 1 then
-  begin
-    // Nothing to choose: with a single year (or none) every choice would be
-    // the same complete uninstall, so skip the dialog (the install wizard
-    // applies the same rule to its year page).
-    Result := True;
-    Exit;
-  end;
-  Form := CreateCustomForm(ScaleX(360), ScaleY(170), False, False);
-  try
-    Form.Caption := CustomMessage('UninstallYearCaption');
-    Form.Position := poScreenCenter;
-
-    Prompt := TNewStaticText.Create(Form);
-    Prompt.Parent := Form;
-    Prompt.Left := ScaleX(12);
-    Prompt.Top := ScaleY(12);
-    Prompt.Caption := CustomMessage('UninstallYearPick');
-
-    Combo := TNewComboBox.Create(Form);
-    Combo.Parent := Form;
-    Combo.Left := ScaleX(12);
-    Combo.Top := ScaleY(36);
-    Combo.Width := ScaleX(336);
-    Combo.Style := csDropDownList;
-    for I := 0 to GetArrayLength(Present) - 1 do
-      Combo.Items.Add(Present[I]);
-    AllIndex := GetArrayLength(Present);
-    Combo.Items.Add(FmtMessage(CustomMessage('UninstallAllOption'), [YearsDisplayList(Present)]));
-    Combo.ItemIndex := AllIndex;
-
-    OkBtn := TNewButton.Create(Form);
-    OkBtn.Parent := Form;
-    OkBtn.Caption := CustomMessage('UninstallOK');
-    OkBtn.Width := ScaleX(90);
-    OkBtn.Height := ScaleY(23);
-    OkBtn.Left := Form.ClientWidth - ScaleX(200);
-    OkBtn.Top := Form.ClientHeight - ScaleY(35);
-    OkBtn.ModalResult := mrOk;
-    OkBtn.Default := True;
-
-    CancelBtn := TNewButton.Create(Form);
-    CancelBtn.Parent := Form;
-    CancelBtn.Caption := CustomMessage('UninstallCancel');
-    CancelBtn.Width := ScaleX(90);
-    CancelBtn.Height := ScaleY(23);
-    CancelBtn.Left := Form.ClientWidth - ScaleX(100);
-    CancelBtn.Top := OkBtn.Top;
-    CancelBtn.ModalResult := mrCancel;
-    CancelBtn.Cancel := True;
-
-    Form.ActiveControl := Combo;
-    if Form.ShowModal() <> mrOk then
-      Exit;
-    if (Combo.ItemIndex < 0) or (Combo.ItemIndex = AllIndex) then
-    begin
-      // "All versions" (the default): complete uninstall.
-      Result := True;
-      Exit;
-    end;
-    RemoveYearPayload(Present[Combo.ItemIndex]);
-    MsgBox(FmtMessage(CustomMessage('UninstallYearRemoved'), [Present[Combo.ItemIndex]]), mbInformation, MB_OK);
-    Result := False;
-  finally
-    Form.Free;
-  end;
-end;
-
-// Refuses to uninstall while Revit holds the add-in DLLs locked, mirroring the
-// install pre-flight, and then asks which year to remove. Returning False
-// aborts the uninstall before any other file is touched; silent runs have no
-// user, so they remove the whole product and report problems by the exit code
-// and by the untouched files instead of a blocking message box.
+// Refuses to uninstall while Revit holds the add-in DLLs. Silent runs have no
+// user, so they only fail (exit code) instead of showing a message.
 function InitializeUninstall(): Boolean;
-var
-  RevitClosed: Boolean;
 begin
-  RevitClosed := not IsProcessRunning('Revit.exe');
-  if not RevitClosed then
-  begin
-    if not UninstallSilent() then
-      MsgBox(CustomMessage('RevitMustCloseUninstall'), mbError, MB_OK);
-    Result := False;
-    Exit;
-  end;
-  if UninstallSilent() then
-    Result := True
-  else
-    Result := AskUninstallYear();
-end;
-
-// Removes the add-in from EVERY supported Revit year (2023..2027), not only
-// the group this Setup covers: the shared AppId gives Windows a single
-// uninstall entry for the whole product, so a partial cleanup would leave the
-// plugin loading in years the user just uninstalled. A partial uninstall never
-// reaches this step (the year was already removed and the uninstaller
-// aborted). Harmless where the year was never installed.
-procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
-var
-  Years: TArrayOfString;
-  Base: string;
-  I: Integer;
-begin
-  if CurUninstallStep <> usUninstall then
-    Exit;
-  SplitText(AllProjectYearsCsv, ',', Years);
-  for I := 0 to GetArrayLength(Years) - 1 do
-  begin
-    Base := ExpandConstant('{commonappdata}\Autodesk\Revit\Addins\' + Years[I]);
-    DelTree(Base + '\SamplePlugin', True, True, True);
-    DeleteFile(Base + '\SamplePlugin.addin');
-  end;
+  Result := not IsProcessRunning('Revit.exe');
+  if (not Result) and (not UninstallSilent()) then
+    MsgBox(CustomMessage('RevitMustCloseUninstall'), mbError, MB_OK);
 end;

@@ -5,7 +5,7 @@ One Revit button that demonstrates how to sell through the Node.aec platform: wi
 This README takes about five minutes. It explains what the sample does, how to run it, and how to apply the same pattern to your own plugin. The license check is a fail-closed gate — `Gate.Validate(ProductSlug)` is the first statement of `IExternalCommand.Execute` — and the license package is a NuGet `PackageReference` to `NodeAec.Licensing.Lite`.
 
 > **Status:** the `src/` code uses `NodeAec.Licensing.Lite` 0.3.0 from NuGet.org, and
-> `dotnet new nodeaec-revit-plugin` (template 0.2.0 or later) generates the same shape.
+> `dotnet new nodeaec-revit-plugin` (template 0.3.0 or later) generates the same shape, bundle installer included.
 > Template 0.1.0 generated an older wrapper class and a manifest with invalid XML: update
 > with `dotnet new install NodeAec.Templates.RevitPlugin --force`.
 
@@ -92,14 +92,12 @@ dotnet build -p:RevitYear=2027   # net10.0-windows
 
 Details: [API.md §8 — Versioning & compatibility matrix](API.md#8-versioning--compatibility-matrix).
 
-**4. Deploy.** Copy two files per [API.md §3.3](API.md#33-packaging-contract-manifest--payload-layout--verified) — the `.addin` file is the Revit manifest: a small XML that declares the assembly Revit loads on startup:
+**4. Deploy.** Run `scripts/release.ps1 -Version 0.1.0`. It builds the three Revit groups into one Autodesk bundle (layout in [API.md §3.3](API.md#33-packaging-contract-bundle-layout--verified)) and produces:
 
-```
-%ProgramData%\Autodesk\Revit\Addins\<year>\MyPlugin.addin
-%ProgramData%\Autodesk\Revit\Addins\<year>\MyPlugin\MyPlugin.dll
-```
+- `release/MyPlugin-0.1.0-Setup.exe`: one installer for Revit 2023–2027. The user checks the Revit versions that should load the plugin; installed versions start checked.
+- `release/MyPlugin-0.1.0.bundle.zip`: the same bundle for IT deployment; extract it into `%ProgramData%\Autodesk\ApplicationPlugins\`.
 
-Or run the group installer (`release/MyPlugin-0.1.0-R<group>-Setup.exe`, produced by `scripts/release.ps1` — one Setup per Revit compatibility group `2023-2024` / `2025-2026` / `2027`; the wizard lists the group's installed Revit versions).
+Add `-Install` to copy the bundle into this machine's `ApplicationPlugins` folder (close Revit first).
 
 The license assembly travels *inside* your payload automatically — nothing extra to deploy. Do not ship `RevitAPI*.dll` alongside your plugin.
 
@@ -246,12 +244,34 @@ revit-sample-plugin/
 ├── .agents/skills/nodeaec-connector-integration/
 │   ├── SKILL.md            installable agent skill
 │   └── references/         gate walkthrough + manual test script
+├── scripts/
+│   ├── release.ps1         builds the 3 Revit groups into SamplePlugin.bundle + zip + Setup.exe
+│   └── installer.iss       Inno Setup: one Setup, a checkbox per Revit year
 └── src/SamplePlugin/
     ├── SamplePlugin.csproj RevitYear matrix + PackageReference NodeAec.Licensing.Lite
-    ├── SamplePlugin.addin  manifest (Assembly = SamplePlugin\SamplePlugin.dll)
+    ├── SamplePlugin.addin  manifest (Assembly = SamplePlugin.dll, copied into each bundle group)
     ├── App.cs              shared Node.aec tab, panel, button, dedup hooks
     └── Commands/HelloCommand.cs   ProductSlug, Gate.Validate first, blocked dialog, greeting
 ```
+
+### Reading the source
+
+The comments in the source explain why each piece is the way it is, not only what it
+does. To learn the integration, read the files in this order:
+
+1. `src/SamplePlugin/Commands/HelloCommand.cs`: the whole licensing integration. How the
+   Connector, the lease and `Gate.Validate` fit together, why the gate runs on every click,
+   why there is no `try/catch`, why the command returns `Cancelled`, why the license key is
+   never shown.
+2. `src/SamplePlugin/App.cs`: how Revit finds and starts an add-in, why the plugin shares
+   the `Node.aec` tab, why there are no licensing calls at startup, and why tab
+   deduplication goes through AdWindows.
+3. `src/SamplePlugin/SamplePlugin.addin`: what each manifest element is for.
+4. `src/SamplePlugin/SamplePlugin.csproj`: why one build per group of Revit years, why
+   the Revit API is never copied while NuGet dependencies always are, and which Lite
+   version to build against.
+5. `scripts/release.ps1` and `scripts/installer.iss`: why a bundle instead of a `.addin`
+   per year, and the order in which Inno Setup runs the installer code.
 
 Scaffold source (what generated this shape): `dotnet new nodeaec-revit-plugin`
 (template package `NodeAec.Templates.RevitPlugin`); license package
