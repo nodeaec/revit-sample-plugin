@@ -273,6 +273,7 @@ revit-sample-plugin/
 ├── API.md                  full integration reference (start at §1)
 ├── AGENTS.md               brief for coding agents working in this repo
 ├── README.md               you are here
+├── docs/USER_MANUAL.md     end-user manual (install, dialogs, troubleshooting)
 ├── LICENSE
 ├── .agents/skills/licensing-integrate/
 │   ├── SKILL.md            installable agent skill
@@ -319,6 +320,7 @@ Scaffold source (what generated this shape): `dotnet new nodeaec-revit-plugin`
 
 ## Links
 
+- [docs/USER_MANUAL.md](docs/USER_MANUAL.md) — for the people who use the plugin in Revit: install, the licensed and blocked dialogs, troubleshooting (also a starting point for your own plugin's manual)
 - [API.md](API.md) — the full integration reference
 - [AGENTS.md](AGENTS.md) — brief for coding agents in this repo
 - [.agents/skills/licensing-integrate/SKILL.md](.agents/skills/licensing-integrate/SKILL.md) — the installable skill

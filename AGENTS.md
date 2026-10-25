@@ -52,6 +52,7 @@ security boundary.
 | `src/SamplePlugin/bin/`, `src/SamplePlugin/obj/` | Per-year build output (`bin\<year>\…`). Git-ignored; never edit, never commit. |
 | `API.md` | The integration contract: connector surface, message taxonomy, ribbon/threading/build rules. Verified against revit-connector@7366482. Section titles are stable — cross-reference them by title. |
 | `README.md` | Human-facing overview and onboarding guide. |
+| `docs/USER_MANUAL.md` | End-user manual: install, the licensed and blocked dialogs, troubleshooting. Quotes the dialog texts and installer messages word for word. |
 | `LICENSE` | MIT. |
 | `.agents/skills/licensing-integrate/SKILL.md` | The canonical Node.aec licensing skill for partner plugins (see §11): new plugin from the template, existing plugin, learning from this sample. `SKILL.md` stays concise; depth lives in `references/licensing-gate.md` (gate walkthrough), `references/migration.md` (existing plugin) and `references/validation.md` (build + manual test script). |
 | `../revit-connector/` | **Outside the repo, READ-ONLY upstream** (see §10). |
@@ -262,7 +263,7 @@ A change to column X **must** update column Y in the same commit (rule G7):
 | If you change… | Update in the SAME change |
 |---|---|
 | Gate usage in commands (`Gate.Validate`, message language, `OpenConnector`, license block) | `API.md` §9 *Command recipe (`HelloCommand.cs`)* + `.agents/skills/licensing-integrate/SKILL.md` + `README.md` + XML docs in the source file |
-| Command control flow / failure UX (dialog shape, `Result` codes) | `API.md` §2 *Quickstart (happy path)* and §5 *Status / reason taxonomy* + skill + `README.md` |
+| Command control flow / failure UX (dialog shape, `Result` codes) | `API.md` §2 *Quickstart (happy path)* and §5 *Status / reason taxonomy* + skill + `README.md` + `docs/USER_MANUAL.md` |
 | Ribbon pattern, panel/button names, hooks | `API.md` §6 *Ribbon integration conventions* + skill + `README.md` + constants' XML docs |
 | Build matrix, TFM pins, `RevitYear` properties | `API.md` §8 *Versioning & compatibility matrix* + csproj header comment + `README.md` + skill |
 | Standalone-adoption change (slug, package add, command gating, ribbon move, payload rules) | `API.md` §13 *Migrating an existing plugin to Lite* + §14 checklist + skill + `README.md` migration section |
@@ -364,7 +365,8 @@ one, check its source of truth, then find every doc that repeats it:
 
 | Fact | Source of truth | Repeated in |
 |---|---|---|
-| This sample's version | `<Version>` in `src/SamplePlugin/SamplePlugin.csproj` | `README.md` and `AGENTS.md` release commands, `API.md` |
+| This sample's version | `<Version>` in `src/SamplePlugin/SamplePlugin.csproj` | `README.md` and `AGENTS.md` release commands, `API.md`, `docs/USER_MANUAL.md` ("Applies to" header, installer file names) |
+| Dialog texts, installer messages, Lite messages shown to users | `src/SamplePlugin/Commands/HelloCommand.cs`, `scripts/installer.iss` `[CustomMessages]`, licensing-lite `GateMessages.cs` | `docs/USER_MANUAL.md` §3–§5 and §8 |
 | Lite version the sample builds against | `PackageReference` in `src/SamplePlugin/SamplePlugin.csproj`; must not be newer than the Connector's ([`src/NodeAec.Connector/NodeAec.Connector.csproj`](https://github.com/nodeaec/revit-connector/blob/main/src/NodeAec.Connector/NodeAec.Connector.csproj)) | `README.md`, `API.md` §8.2 and §13, the skill, `references/licensing-gate.md` |
 | Latest Lite on NuGet | <https://www.nuget.org/packages/NodeAec.Licensing.Lite> | `README.md` status note |
 | `Snapshot` members, `GateReason` values and messages | [licensing-lite](https://github.com/nodeaec/licensing-lite) `src/NodeAec.Licensing.Lite/Gate.cs`, `GateReason.cs`, `GateMessages.cs` | `API.md` §4–§5, `references/licensing-gate.md` |
