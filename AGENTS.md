@@ -43,17 +43,17 @@ security boundary.
 
 | Path | Role |
 |---|---|
-| `src/SamplePlugin/SamplePlugin.csproj` | SDK-style project: Revit-year matrix, the `NodeAec.Licensing.Lite` `PackageReference`, per-year `bin\`/`obj\` isolation. Header comment documents the build commands — keep it in sync with reality. ([source](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/SamplePlugin.csproj)) |
-| `src/SamplePlugin/App.cs` | `IExternalApplication`. Builds the shared ribbon: `Node.aec` tab (defensive create), panel `Sample Plugin`, button `Hello World`, local tab-dedup replica + AdWindows hooks. **Contains zero Node.aec Connector API calls** — by design. ([source](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/App.cs)) |
-| `src/SamplePlugin/Commands/HelloCommand.cs` | `SamplePlugin.Commands.HelloCommand`. **The whole integration**: the `ProductSlug` constant, `Gate.Validate(ProductSlug)` as the first statement, the blocked dialog (`gate.GetMessage(language)` + `Gate.OpenConnector()` link + `Result.Cancelled`), and the licensed greeting. ([source](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/Commands/HelloCommand.cs)) |
-| `src/SamplePlugin/SamplePlugin.addin` | Revit manifest with relative `<Assembly>SamplePlugin.dll</Assembly>`. Packaging copies it next to the DLL in each `Contents\<group>\` folder of `SamplePlugin.bundle`. ([source](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/SamplePlugin.addin)) |
+| `src/SamplePlugin/SamplePlugin.csproj` | SDK-style project: Revit-year matrix, the `NodeAec.Licensing.Lite` `PackageReference`, per-year `bin\`/`obj\` isolation. Header comment documents the build commands — keep it in sync with reality. ([source](https://github.com/nodeaec/revit-sample-plugin/blob/main/src/SamplePlugin/SamplePlugin.csproj)) |
+| `src/SamplePlugin/App.cs` | `IExternalApplication`. Builds the shared ribbon: `Node.aec` tab (defensive create), panel `Sample Plugin`, button `Hello World`, local tab-dedup replica + AdWindows hooks. **Contains zero Node.aec Connector API calls** — by design. ([source](https://github.com/nodeaec/revit-sample-plugin/blob/main/src/SamplePlugin/App.cs)) |
+| `src/SamplePlugin/Commands/HelloCommand.cs` | `SamplePlugin.Commands.HelloCommand`. **The whole integration**: the `ProductSlug` constant, `Gate.Validate(ProductSlug)` as the first statement, the blocked dialog (`gate.GetMessage(language)` + `Gate.OpenConnector()` link + `Result.Cancelled`), and the licensed greeting. ([source](https://github.com/nodeaec/revit-sample-plugin/blob/main/src/SamplePlugin/Commands/HelloCommand.cs)) |
+| `src/SamplePlugin/SamplePlugin.addin` | Revit manifest with relative `<Assembly>SamplePlugin.dll</Assembly>`. Packaging copies it next to the DLL in each `Contents\<group>\` folder of `SamplePlugin.bundle`. ([source](https://github.com/nodeaec/revit-sample-plugin/blob/main/src/SamplePlugin/SamplePlugin.addin)) |
 | `scripts/release.ps1` | Release pipeline (mirrors the connector's): builds the three compatibility groups (floor years 2023 / 2025 / 2027), stages one `SamplePlugin.bundle` (`PackageContents.xml` + `Contents\<group>\`), zips it with a sha256, and compiles the single Setup.exe via `installer.iss` when ISCC.exe is present. `powershell -ExecutionPolicy Bypass -File scripts/release.ps1 -Version 0.3.0 [-Install]` (`-Version` is required and must match the csproj; `-Install` copies the bundle to `%ProgramData%\Autodesk\ApplicationPlugins\`). |
 | `scripts/installer.iss` (+ `installer-after*.txt`) | Inno Setup 6 script: one Setup.exe for Revit 2023–2027, one Apps entry (`AppId` kept from the per-group installers). One checkbox per Revit year (installed years start checked, a re-run starts from the previous choice; silent: `/RevitYears=2025,2026`); copies only the checked groups' builds and writes `PackageContents.xml` in `[Code]`. Removes the old per-group installs (`Addins\<year>\SamplePlugin*`) first. Must stay plain ASCII. |
 | `src/SamplePlugin/bin/`, `src/SamplePlugin/obj/` | Per-year build output (`bin\<year>\…`). Git-ignored; never edit, never commit. |
 | `API.md` | The integration contract: connector surface, message taxonomy, ribbon/threading/build rules. Verified against revit-connector@7366482. Section titles are stable — cross-reference them by title. |
 | `README.md` | Human-facing overview and onboarding guide. |
 | `LICENSE` | MIT. |
-| `.agents/skills/nodeaec-connector-integration/SKILL.md` | This project's skill: the actionable adaptation workflow (see §11). Progressive disclosure: `SKILL.md` stays concise, depth lives in `references/licensing-gate.md` (gate walkthrough) and `references/validation.md` (build + manual test script). |
+| `.agents/skills/licensing-integrate/SKILL.md` | The canonical Node.aec licensing skill for partner plugins (see §11): new plugin from the template, existing plugin, learning from this sample. `SKILL.md` stays concise; depth lives in `references/licensing-gate.md` (gate walkthrough), `references/migration.md` (existing plugin) and `references/validation.md` (build + manual test script). |
 | `../revit-connector/` | **Outside the repo, READ-ONLY upstream** (see §10). |
 
 ---
@@ -68,7 +68,7 @@ security boundary.
 | G4 | **Never create a plugin-owned ribbon tab.** | One shared `Node.aec` tab; a plugin adds its own panel (`Sample Plugin`) and button (`Hello World`) inside it (`API.md` §6 "Ribbon integration conventions"). |
 | G5 | **Never call Node.aec HTTP APIs and never build login/license-manager UI.** | A plugin does local, offline validation only; the connector owns SSO, sync, heartbeat, and its UI. `ConnectorApiClient` is Hub-internal (`API.md` §1 "Overview & responsibility split", §4 "Public integration surface"). |
 | G6 | **The upstream connector repo is READ-ONLY.** | `../revit-connector` (github.com/nodeaec/revit-connector): never write, never "fix" it from this repo's sessions (§10). |
-| G7 | **Code wins over docs — and code changes update docs in the SAME change.** | Any change to `src/SamplePlugin/*` updates `API.md` **and** `.agents/skills/nodeaec-connector-integration/SKILL.md` **and** `README.md` together (table in §9, migration docs in `API.md` §§13–14 included). Never land a code-only or doc-only behavioral change. |
+| G7 | **Code wins over docs — and code changes update docs in the SAME change.** | Any change to `src/SamplePlugin/*` updates `API.md` **and** `.agents/skills/licensing-integrate/SKILL.md` **and** `README.md` together (table in §9, migration docs in `API.md` §§13–14 included). Never land a code-only or doc-only behavioral change. |
 | G8 | **Never swallow an exception into "licensed".** | Catches may fail closed (blocked dialog + `Result.Cancelled`) or degrade (`OpenConnector()` → silent no-op). A `catch` that proceeds with the feature, or that returns `Result.Succeeded` on an unknown state, is forbidden. |
 | G9 | **The gate's message is verbatim — and it is the whole message.** | Show `gate.GetMessage(language)` as-is (Portuguese or English, following Revit's UI language); never translate, re-word, or trim it. It already names the one specific reason and the next step, so it is the dialog's content: never surround it with a generic list of possible causes (the user cannot tell which applies and the real reason gets buried) (`API.md` §5). |
 
@@ -109,7 +109,7 @@ dotnet build src/SamplePlugin/SamplePlugin.csproj -p:RevitYear=2026   # default
 dotnet build src/SamplePlugin/SamplePlugin.csproj -p:RevitYear=2023   # net48
 dotnet build src/SamplePlugin/SamplePlugin.csproj -p:RevitYear=2027   # net10
 ```
-Source: canonical forms documented in [SamplePlugin.csproj:L16-L18](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/SamplePlugin.csproj#L16-L18).
+Source: canonical forms documented in [SamplePlugin.csproj:L16-L18](https://github.com/nodeaec/revit-sample-plugin/blob/main/src/SamplePlugin/SamplePlugin.csproj#L16-L18).
 
 Year → TFM: `2023|2024` → `net48`, `2025|2026` → `net8.0-windows`, `2027` →
 `net10.0-windows`. 2026 deliberately stays on `net8.0-windows` (rationale in the csproj
@@ -126,7 +126,7 @@ and DPAPI (`ProtectedData`/`CurrentUser`) requires a real interactive logon sess
 (`API.md` §10 "Troubleshooting / FAQ"). Validation therefore = the build matrix above +
 the **manual test protocol**, whose home is `API.md` (§3.3 packaging checklist, §10
 "Troubleshooting / FAQ"), restated as an actionable checklist in
-[`.agents/skills/nodeaec-connector-integration/SKILL.md`](.agents/skills/nodeaec-connector-integration/SKILL.md)
+[`.agents/skills/licensing-integrate/SKILL.md`](.agents/skills/licensing-integrate/SKILL.md)
 and in [`README.md`](README.md) (validate step).
 Do not invent a unit-test harness that mocks the gate — its contract is
 "never throws, fail closed" (tested in the Lite repository), and it is proven by build + manual run in a real Revit
@@ -222,7 +222,7 @@ relative `Assembly`, and build the `RevitYear` matrix.
 ## 8. Adapting the sample to a real plugin
 
 **Step 0 — read the skill first:**
-[`.agents/skills/nodeaec-connector-integration/SKILL.md`](.agents/skills/nodeaec-connector-integration/SKILL.md).
+[`.agents/skills/licensing-integrate/SKILL.md`](.agents/skills/licensing-integrate/SKILL.md).
 It is the authoritative workflow for this repo; this section is its summary.
 
 Checklist (order matters):
@@ -261,7 +261,7 @@ A change to column X **must** update column Y in the same commit (rule G7):
 
 | If you change… | Update in the SAME change |
 |---|---|
-| Gate usage in commands (`Gate.Validate`, message language, `OpenConnector`, license block) | `API.md` §9 *Command recipe (`HelloCommand.cs`)* + `.agents/skills/nodeaec-connector-integration/SKILL.md` + `README.md` + XML docs in the source file |
+| Gate usage in commands (`Gate.Validate`, message language, `OpenConnector`, license block) | `API.md` §9 *Command recipe (`HelloCommand.cs`)* + `.agents/skills/licensing-integrate/SKILL.md` + `README.md` + XML docs in the source file |
 | Command control flow / failure UX (dialog shape, `Result` codes) | `API.md` §2 *Quickstart (happy path)* and §5 *Status / reason taxonomy* + skill + `README.md` |
 | Ribbon pattern, panel/button names, hooks | `API.md` §6 *Ribbon integration conventions* + skill + `README.md` + constants' XML docs |
 | Build matrix, TFM pins, `RevitYear` properties | `API.md` §8 *Versioning & compatibility matrix* + csproj header comment + `README.md` + skill |
@@ -287,39 +287,38 @@ Upstream: **https://github.com/nodeaec/revit-connector**, local read-only checko
   if you find an upstream bug, report it — do not patch it from a session rooted here.
 - The upstream repo has its **own** `AGENTS.md` and skills; they govern work done
   *there*, and they are useful background here:
-  - **`licensing-integrate`** — the upstream end-to-end licensing integration recipes
-    (Hub & Micro-Gate). **Divergence:** its source-copy recipe is an incomplete
-    dependency closure, and its TFM set is not the 2023–2027 matrix; `API.md`
-    §3 *The integration path (authoritative)* governs the integration path
-    for this repository. Follow `API.md` here.
+  - **`licensing-integrate`** there is a short pointer to **this** repo's skill, which is
+    the canonical one.
   - **`ribbon-guard`** — upstream ribbon/panel/tab conventions and ghost-tab cleanup.
-    Background for §6 rules; note it references helpers that do not exist in connector
-    source (see `API.md` §12) — the sample's `App.cs` code is what to
-    imitate.
+    Background for §6 rules; the sample's `App.cs` code is what to imitate.
   - **`revit-build-validate`** — upstream build/dependency-pollution rules (never ship
     Revit binaries, clean compilation). Directly applicable when validating this repo's
     matrix.
-- Upstream docs (README, `docs/licensing-api.md`, `docs/USER_MANUAL.md`) contain
-  verified code-vs-doc discrepancies; `API.md` §12 records the verification commit
-  (`7366482`) and the flagged uncertainties.
-- Connector version referenced today: `0.1.2`; do not hard-code it in plugin code.
+- `API.md` §12 records the upstream commit its Hub facts were verified against.
+- Never hard-code the Connector's version in plugin code; §13 says where to look it up.
 
 ---
 
 ## 11. This repo's skill and how to use it
 
-**`.agents/skills/nodeaec-connector-integration/SKILL.md`** is this project's skill.
+**`.agents/skills/licensing-integrate/SKILL.md`** is the canonical Node.aec licensing skill
+for partner plugins. Partners copy it into their own repos, and two other copies exist:
+
+| Copy | What it is |
+|---|---|
+| `templates-revit` `content/__PluginName__/.agents/skills/licensing-integrate/` | Byte-for-byte copy that every `dotnet new nodeaec-revit-plugin` project receives |
+| `revit-connector` `.agents/skills/licensing-integrate/SKILL.md` | A short pointer to this one, for agents working in the Connector |
 
 - **Load it before any task** that touches licensing, ribbon, packaging, build, or
-  adaptation of this sample. It encodes the workflow this `AGENTS.md` summarizes; where
-  it and `API.md` overlap, they must agree — if you find a mismatch, fix both in the same
-  change (§9).
-- Use it as the checklist when asked to "add Node.aec licensing", "protect a Revit
-  command", "adapt the sample", or "package the add-in".
-- The upstream skills (`licensing-integrate`, `ribbon-guard`, `revit-build-validate`)
-  are **background only** here; this repo's skill + `API.md` + `AGENTS.md` govern.
+  adaptation of this sample. Where it and `API.md` overlap, they must agree — if you find
+  a mismatch, fix both in the same change (§9).
+- The skill is copied into other repos, so it must not depend on this repo's layout: link
+  to this repo's files with full `https://github.com/nodeaec/revit-sample-plugin/blob/main/...`
+  URLs, never relative paths outside the skill folder.
+- **After changing the skill**, the template's copy must get the same change. Tell the user
+  (or, when asked to, copy the folder into a `templates-revit` checkout and commit there).
 - Do not create additional skills or move the skill; reference it by its exact path:
-  `.agents/skills/nodeaec-connector-integration/SKILL.md`.
+  `.agents/skills/licensing-integrate/SKILL.md`.
 
 ---
 
@@ -354,3 +353,23 @@ Upstream: **https://github.com/nodeaec/revit-connector**, local read-only checko
   anchor still points at the intended lines (§9).
 - ❌ Do not fabricate tests or claim runtime validation that requires Revit/DPAPI — say
   what was actually built and what still needs the manual run (§5).
+
+---
+
+## 13. Facts that go stale, and where to check them
+
+Versions and pins are repeated across the docs. Before you trust one, or after you change
+one, check its source of truth, then find every doc that repeats it:
+`grep -rn "<old value>" --include=*.md .` (and the source comments).
+
+| Fact | Source of truth | Repeated in |
+|---|---|---|
+| This sample's version | `<Version>` in `src/SamplePlugin/SamplePlugin.csproj` | `README.md` and `AGENTS.md` release commands, `API.md` |
+| Lite version the sample builds against | `PackageReference` in `src/SamplePlugin/SamplePlugin.csproj`; must not be newer than the Connector's ([`src/NodeAec.Connector/NodeAec.Connector.csproj`](https://github.com/nodeaec/revit-connector/blob/main/src/NodeAec.Connector/NodeAec.Connector.csproj)) | `README.md`, `API.md` §8.2 and §13, the skill, `references/licensing-gate.md` |
+| Latest Lite on NuGet | <https://www.nuget.org/packages/NodeAec.Licensing.Lite> | `README.md` status note |
+| `Snapshot` members, `GateReason` values and messages | [licensing-lite](https://github.com/nodeaec/licensing-lite) `src/NodeAec.Licensing.Lite/Gate.cs`, `GateReason.cs`, `GateMessages.cs` | `API.md` §4–§5, `references/licensing-gate.md` |
+| Template version (and what it generates) | <https://www.nuget.org/packages/NodeAec.Templates.RevitPlugin>; `<Version>` in templates-revit `NodeAec.Templates.RevitPlugin.csproj` | `README.md` status note, `API.md` §12, the skill |
+| Revit year → TFM, Revit API package pins | `TargetFramework` / `RevitApiPkgVersion` in `src/SamplePlugin/SamplePlugin.csproj` | csproj header, `API.md` §8, `README.md` |
+| Hub facts quoted in `API.md` | revit-connector at the commit named in `API.md` §12 | `API.md` |
+| Bundle identity (`AppId`, `ProductCode`, `UpgradeCode`) | `scripts/installer.iss` and `scripts/release.ps1` (must match; never change between versions) | `API.md` §3.3 |
+

@@ -179,43 +179,76 @@ in [API.md §13](API.md#13-migrating-an-existing-plugin-to-lite), CI checklist i
 
 ## Let your agent do it
 
-Point your coding agent at this repo. It should read the agent brief, the installable skill, then the reference — in that order.
+Every path below has the same agent material: the skill
+[`.agents/skills/licensing-integrate/`](.agents/skills/licensing-integrate/SKILL.md) (detailed
+steps, rules and checks) and a prompt to paste into your coding agent. To install the skill,
+copy the `.agents/skills/licensing-integrate/` folder into your repo's `.agents/skills/` folder
+(or your agent's global skills folder). Projects made from the template already have it.
 
 <details>
-<summary>Copy-paste agent prompt (click to expand)</summary>
+<summary>Prompt: start a new plugin from the template</summary>
 
 ```text
-You are adding Node.aec licensing to my Revit plugin (new plugin path).
+Create a new Autodesk Revit plugin licensed through Node.aec.
 
-Learn from https://github.com/nodeaec/revit-sample-plugin — read first:
-  1. AGENTS.md
-  2. .agents/skills/nodeaec-connector-integration/SKILL.md
-  3. API.md (authoritative; follow its section titles, do not invent API)
+Follow the skill at https://github.com/nodeaec/revit-sample-plugin/tree/main/.agents/skills/licensing-integrate
+(SKILL.md, path A). The Sample Plugin in that repo is the worked example.
 
-My repo: <your-plugin-repo>
+Before writing code, ask me the questions in the skill's section 2 (product slug, Revit
+years, panel name, which commands are paid, test machine) and wait for my answers.
 
-Confirm before writing code — stop and ask if anything is unresolved:
-  - Target Revit year (2023–2027) and its framework (2023/24 net48, 2025/26 net8.0-windows, 2027 net10.0-windows)
-  - My catalog slug: <your-product-slug>
-  - Which commands need gating (answer: all of them)
-  - Whether the test machine has the connector installed with an entitled session (needed only for the licensed run, never for the build)
+Then: install the template (dotnet new install NodeAec.Templates.RevitPlugin), scaffold with
+dotnet new nodeaec-revit-plugin, add my commands with the gate as their first statement,
+build every compatibility group with 0 errors, and package with scripts/release.ps1.
 
-Then: scaffold with dotnet new nodeaec-revit-plugin -n <Name> --ProductSlug <slug>
-(API.md §3); set the ProductSlug constant; call Gate.Validate(ProductSlug) first in
-every command and branch only on IsLicensed, with the blocked dialog showing
-gate.GetMessage(language) + Gate.OpenConnector() + Cancelled (API.md §2, §5, §7, §9); place my panel under the shared Node.aec tab
-with idempotent inserts (API.md §6); build the RevitYear matrix 2023/2026/2027
-(API.md §8); report file-by-file changes plus the manual cases I must still
-run in Revit.
-
-Rules: never weaken the gate, never invent Snapshot fields, never match on
-message text, never reference or copy a connector DLL, never add
-HTTP calls or login UI.
+Finish with: the files you created or changed, and the manual Revit checks from the
+skill's references/validation.md that I still have to run.
 ```
 
 </details>
 
-To install the skill, copy `.agents/skills/nodeaec-connector-integration/` into your repo's `.agents/skills/` folder (or your agent's global skills directory). `AGENTS.md` is the companion brief for agents working here.
+<details>
+<summary>Prompt: add licensing to an existing plugin</summary>
+
+```text
+Add Node.aec licensing to my existing Autodesk Revit plugin in this repository.
+
+Follow the skill at https://github.com/nodeaec/revit-sample-plugin/tree/main/.agents/skills/licensing-integrate
+(SKILL.md, path B, and references/migration.md). The Sample Plugin in that repo is the
+worked example.
+
+First read my code and report the inventory from references/migration.md section 1
+(projects and frameworks, commands, Ribbon, any existing license check, installer). Then
+ask me the questions in SKILL.md section 2 and wait for my answers.
+
+Then: add the NodeAec.Licensing.Lite package, gate every paid command with Gate.Validate
+as its first statement, move my panels into the shared Node.aec tab, and keep my installer
+working (or switch to the bundle installer if I choose that). Change nothing else.
+
+Finish with: the files you changed, the commands you gated (and any you left ungated, with
+the reason), and the manual Revit checks I still have to run.
+```
+
+</details>
+
+<details>
+<summary>Prompt: learn from the Sample Plugin</summary>
+
+```text
+Teach me how Node.aec licensing works in an Autodesk Revit plugin, using the Sample Plugin.
+
+Clone https://github.com/nodeaec/revit-sample-plugin and follow its skill
+(.agents/skills/licensing-integrate/SKILL.md, path C).
+
+Build it, then walk me through the source in the order of the README's "Reading the
+source" section. For each file, explain what it does and why, using the comments in the
+code; do not invent reasons. Tell me how to install and run it in Revit, and what I should
+see with and without a license.
+
+Do not change any file.
+```
+
+</details>
 
 ## Troubleshooting
 
@@ -229,7 +262,7 @@ Plain-English symptoms; fixes grounded in [API.md §5](API.md#5-status--reason-t
 | License or trial expired | Renew in the Node.aec portal, let the connector sync |
 | Seat limit reached | Free a seat in the web portal, then re-run |
 | Offline grace expired | Go online, click sync in the connector, re-run |
-| No credentials and no connector for this Revit year | Get it from the [product page](https://nodeaec.com.br/products/nodeaec-connector) ([source](https://github.com/nodeaec/revit-connector)), install it for that year, sign in — then re-run (no rebuild needed: compiling does not require the connector) |
+| No credentials and no connector for this Revit year | Get it from the [product page](https://nodeaec.com.br/products/nodeaec-connector) ([source](https://github.com/nodeaec/revit-connector)) and install it; if it is installed already, run its Setup again and check this Revit version. Sign in, then re-run (no rebuild needed: compiling does not require the connector) |
 | Two `Node.aec` tabs after reload | Re-read [API.md §6](API.md#6-ribbon-integration-conventions): idempotent panel/button inserts plus the AdWindows hooks |
 | Open-connector button seems to do nothing | Expected when the connector UI is unreachable — `OpenConnector()` is a silent no-op by contract, so the dialog already carries the guidance |
 
@@ -241,7 +274,7 @@ revit-sample-plugin/
 ├── AGENTS.md               brief for coding agents working in this repo
 ├── README.md               you are here
 ├── LICENSE
-├── .agents/skills/nodeaec-connector-integration/
+├── .agents/skills/licensing-integrate/
 │   ├── SKILL.md            installable agent skill
 │   └── references/         gate walkthrough + manual test script
 ├── scripts/
@@ -288,7 +321,7 @@ Scaffold source (what generated this shape): `dotnet new nodeaec-revit-plugin`
 
 - [API.md](API.md) — the full integration reference
 - [AGENTS.md](AGENTS.md) — brief for coding agents in this repo
-- [.agents/skills/nodeaec-connector-integration/SKILL.md](.agents/skills/nodeaec-connector-integration/SKILL.md) — the installable skill
+- [.agents/skills/licensing-integrate/SKILL.md](.agents/skills/licensing-integrate/SKILL.md) — the installable skill
 - [Sample Plugin product page](https://nodeaec.com.br/products/revit-sample-plugin) — the catalog entry for this sample's `revit-sample-plugin` slug (the entitlement your connector session needs for the demo)
 - [Node.aec Connector product page](https://nodeaec.com.br/products/nodeaec-connector) — download and install the connector (needed only for the licensed run, never for the build)
 - [github.com/nodeaec/revit-connector](https://github.com/nodeaec/revit-connector) — the **Node.aec Connector source**: the desktop hub this sample plugs into. It owns sign-in, license sync, and the shared `Node.aec` ribbon tab. Read-only upstream — install it, never copy code out of it by hand.

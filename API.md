@@ -119,7 +119,7 @@ are the exact MSBuild, the one integration path, and the folder layout.
   <PackageReference Include="NodeAec.Licensing.Lite" Version="0.3.0" />
 </ItemGroup>
 ```
-Source: [SamplePlugin.csproj:L94](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/SamplePlugin.csproj#L94) (restored from NuGet.org — §8.2).
+Source: [SamplePlugin.csproj:L94](https://github.com/nodeaec/revit-sample-plugin/blob/main/src/SamplePlugin/SamplePlugin.csproj#L94) (restored from NuGet.org — §8.2).
 
 - **The licensing decision compiles into your assembly.** A loose DLL with the right
   name and class could stand in for the decision (attack A in the plan), so the
@@ -508,7 +508,7 @@ public class App : IExternalApplication
     }
 }
 ```
-Source: [App.cs](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/App.cs) — constants [L29-L38](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/App.cs#L29-L38), startup [L47](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/App.cs#L47), tab [L100](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/App.cs#L100), panel [L118-L130](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/App.cs#L118-L130), hooks [L175-L179](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/App.cs#L175-L179), dedup [L200](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/App.cs#L200).
+Source: [App.cs](https://github.com/nodeaec/revit-sample-plugin/blob/main/src/SamplePlugin/App.cs) — constants [L29-L38](https://github.com/nodeaec/revit-sample-plugin/blob/main/src/SamplePlugin/App.cs#L29-L38), startup [L47](https://github.com/nodeaec/revit-sample-plugin/blob/main/src/SamplePlugin/App.cs#L47), tab [L100](https://github.com/nodeaec/revit-sample-plugin/blob/main/src/SamplePlugin/App.cs#L100), panel [L118-L130](https://github.com/nodeaec/revit-sample-plugin/blob/main/src/SamplePlugin/App.cs#L118-L130), hooks [L175-L179](https://github.com/nodeaec/revit-sample-plugin/blob/main/src/SamplePlugin/App.cs#L175-L179), dedup [L200](https://github.com/nodeaec/revit-sample-plugin/blob/main/src/SamplePlugin/App.cs#L200).
 
 Optional alternative to `DeduplicateTab()`, **only if you accept the load dependency**:
 `NodeAec.Connector.App.DeduplicateRibbonTabs(TabName); NodeAec.Connector.App.CleanRogueRibbonElements();`
@@ -737,7 +737,7 @@ public class HelloCommand : IExternalCommand
     }
 }
 ```
-Source: [HelloCommand.cs](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/Commands/HelloCommand.cs).
+Source: [HelloCommand.cs](https://github.com/nodeaec/revit-sample-plugin/blob/main/src/SamplePlugin/Commands/HelloCommand.cs).
 
 To adapt it: change `ProductSlug`, rename the namespace and titles, and put your feature
 where the greeting is. With several commands, move `ProductSlug` and `UserLanguage` to a
@@ -846,7 +846,7 @@ maintenance burden, divergent versions). Exactly one integration path is authori
   `src/` code, and `Source:` links above
   point at the authoritative location for each excerpt.
 - Related documents in this repository: [`README.md`](README.md) · [`AGENTS.md`](AGENTS.md) ·
-  [`.agents/skills/nodeaec-connector-integration/SKILL.md`](.agents/skills/nodeaec-connector-integration/SKILL.md)
+  [`.agents/skills/licensing-integrate/SKILL.md`](.agents/skills/licensing-integrate/SKILL.md)
 - **Remaining uncertainties are flagged inline with [Uncertain]/GUESS**: off-UI-thread
   behavior of `Validate`/`OpenConnector` (§7), partner support for
   `App.DeduplicateRibbonTabs`/`CleanRogueRibbonElements` (§6), and the future of a
@@ -855,6 +855,10 @@ maintenance burden, divergent versions). Exactly one integration path is authori
 ---
 
 ## 13. Migrating an existing plugin to Lite
+
+The agent version of this section, with the inventory to make first and the packaging
+choices, is the skill's
+[`references/migration.md`](.agents/skills/licensing-integrate/references/migration.md).
 
 For existing STANDALONE plugins — shipping today with no Node.aec integration
 at all — adopting `NodeAec.Licensing.Lite` for the first time. Target API
@@ -885,10 +889,11 @@ Matching is `Trim()` + case-insensitive.
 dotnet add package NodeAec.Licensing.Lite
 ```
 
-which declares (version pinned per §8.2):
+which declares the latest version (pin the one the current Connector ships, or an older
+one — §8.2; `AGENTS.md` §13 says where to look it up):
 
 ```xml
-<PackageReference Include="NodeAec.Licensing.Lite" Version="1.0.*" />
+<PackageReference Include="NodeAec.Licensing.Lite" Version="0.3.0" />
 ```
 
 The decision compiles into your assembly and restores from NuGet, so a machine
@@ -984,7 +989,9 @@ Executable checklist (human or agent, same order):
   failures read `NU1101`)
 - [ ] payload with no `RevitAPI*.dll`, `AdWindows.dll`, `NodeAec.Connector.dll`;
   Lite + deps ship together (`ProtectedData.dll` only on net48)
-- [ ] manifest at the year root, relative `<Assembly>`
+- [ ] each `Contents\<group>\` folder of the bundle holds the manifest with a relative
+  `<Assembly>` (or, with the plugin's own installer, the manifest's `<Assembly>` points at
+  the installed DLL)
 - [ ] manual protocol §13 Step 7 completed (licensed / blocked / no-lease /
   reload with no ghost tab)
 - [ ] `Source:` links re-anchored (any moved `src/` → verify each link)
@@ -992,6 +999,6 @@ Executable checklist (human or agent, same order):
 **`nodeaec-verify` (concept — future SHALL).** No verification script exists
 in this repo today (confirmed by grepping `scripts/`); CI SHALL gain a
 `nodeaec-verify` that blocks: `RevitAPI*`/`AdWindows`/`Connector.dll` in a plugin
-payload, a manifest outside the year root, a `HintPath` to a connector DLL, and
+payload, a bundle group without its manifest, a `HintPath` to a connector DLL, and
 `ProtectedData.dll` outside net48. Until it exists, the checklist above is the verification
 — do not invent an existing file.

@@ -1,22 +1,20 @@
-# Validation — build matrix + manual Revit test script
+# Validation: build + manual Revit test script
 
-Deep detail for step 8 of SKILL.md.
+Detail for SKILL.md §7.
 
-## 1. Build matrix
+## 1. Build
 
-SDK-style csproj; the year selects the TFM and the Lite package restores from
-NuGet (API.md §13):
+Build each compatibility group with its oldest Revit year (the same builds `release.ps1`
+makes); every build must end with 0 errors:
 
-```bash
-dotnet build src/SamplePlugin/SamplePlugin.csproj -p:RevitYear=2023   # net48
-dotnet build src/SamplePlugin/SamplePlugin.csproj -p:RevitYear=2024   # net48
-dotnet build src/SamplePlugin/SamplePlugin.csproj -p:RevitYear=2025   # net8.0-windows
-dotnet build src/SamplePlugin/SamplePlugin.csproj -p:RevitYear=2026   # net8.0-windows (default)
-dotnet build src/SamplePlugin/SamplePlugin.csproj -p:RevitYear=2027   # net10.0-windows
+```powershell
+dotnet build -p:RevitYear=2023   # net48            (Revit 2023-2024)
+dotnet build -p:RevitYear=2025   # net8.0-windows   (Revit 2025-2026)
+dotnet build -p:RevitYear=2027   # net10.0-windows  (Revit 2027)
 ```
-Source: canonical forms documented in [SamplePlugin.csproj:L16-L18](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/SamplePlugin.csproj#L16-L18).
 
-A restore failure reads `NU1101` (package not found — check the feed/version).
+A restore failure reading `NU1101` means the package was not found: check the feed and the
+version (SKILL.md §9).
 
 Payload hygiene — the `release/`/`stage/` output must contain **neither**
 `RevitAPI*.dll`/`AdWindows.dll` **nor** `NodeAec.Connector.dll`, while Lite and
@@ -30,7 +28,7 @@ its deps **travel together** (`NodeAec.Licensing.Lite.dll`,
   Contents\<group>\SamplePlugin.addin        Assembly = SamplePlugin.dll (relative)
   Contents\<group>\SamplePlugin.dll          + Lite and its dependencies
 ```
-Source: [SamplePlugin.addin](https://github.com/nodeaec/revit-sample-plugin/blob/master/src/SamplePlugin/SamplePlugin.addin).
+Example: the Sample Plugin's [`SamplePlugin.addin`](https://github.com/nodeaec/revit-sample-plugin/blob/main/src/SamplePlugin/SamplePlugin.addin). A plugin that keeps its own installer can use any layout; the payload rules still apply.
 
 ## 2. Manual Revit test script
 
@@ -49,17 +47,16 @@ interactive logon — CI/headless cannot cover this). Record: dialog shown,
 
 ## 3. `nodeaec-verify` (concept — future SHALL, no real script today)
 
-Confirmed: `scripts/` contains only `release.ps1`/`installer.iss` (+afters). CI
-SHALL gain a `nodeaec-verify` that fails when: the payload contains
-`RevitAPI*`/`AdWindows`/`UIFramework*`/`NodeAec.Connector.dll`; a `Contents\<group>\` folder lacks
-its manifest or `<Assembly>` is not relative; a `HintPath.*NodeAec.Connector` or
-`ProjectReference.*Connector` remains in the csproj; `ProtectedData.dll` is outside the
-net48 payload. Until it exists, the checklist grep (API.md §14) applies — do not quote
-a script path as if it existed.
+Payload check after `release.ps1` (PowerShell, from the project folder); both must print nothing:
+
+```powershell
+Get-ChildItem release\stage -Recurse -Include RevitAPI*.dll,AdWindows.dll,UIFramework*.dll,NodeAec.Connector.dll
+Get-ChildItem release\stage -Recurse -Filter System.Security.Cryptography.ProtectedData.dll | Where-Object { $_.DirectoryName -notlike "*2023-2024*" }
+```
 
 Cross-checks after the run:
 
 - `%APPDATA%\NodeAec\connector.log` for cases 2–4 (`WARN`/`ERROR` lines, never
   tokens or keys).
 - Negative network test: run cases 1–5 with the machine offline — offline is
-  not a failure (API.md §5); only lease expiry (case 4) differs.
+  not a failure ([API.md §5](https://github.com/nodeaec/revit-sample-plugin/blob/main/API.md#5-status--reason-taxonomy)); only lease expiry (case 4) differs.

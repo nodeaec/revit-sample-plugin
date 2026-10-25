@@ -1,7 +1,7 @@
 # The license gate in a command — full walkthrough
 
-Deep detail for steps 2 and 5 of SKILL.md. Canonical source:
-`src/SamplePlugin/Commands/HelloCommand.cs` (see also API.md §9
+Detail for SKILL.md §5. Canonical source: the Sample Plugin's
+[`HelloCommand.cs`](https://github.com/nodeaec/revit-sample-plugin/blob/main/src/SamplePlugin/Commands/HelloCommand.cs) (see also [API.md §9](https://github.com/nodeaec/revit-sample-plugin/blob/main/API.md#9-command-recipe-hellocommandcs)
 *Command recipe (`HelloCommand.cs`)*).
 
 ## Design rules
@@ -54,7 +54,10 @@ adds `AddCommandLink(... "Open Node.aec Connector...")` calling
 (`null` renders "no end date (perpetual)", never "expired"). It leaves the
 license key out on purpose.
 
-## `Snapshot` members (Lite 0.3.0)
+## `Snapshot` members
+
+As of Lite 0.3.0; the current list is in the [licensing-lite README](https://github.com/nodeaec/licensing-lite#snapshot).
+
 
 | Member | Use |
 |---|---|
@@ -65,7 +68,7 @@ license key out on purpose.
 | `ProductName`, `LicenseType`, `ExpiresAt` | Display only; `null` on failure |
 | `LicenseKey` | The user's secret: never show or log it |
 
-## Threading reminder (API.md §7)
+## Threading reminder ([API.md §7](https://github.com/nodeaec/revit-sample-plugin/blob/main/API.md#7-threading--revit-api-context-rules))
 
 Call `Gate.Validate` once per `Execute`, at entry. It does disk I/O (lease read +
 DPAPI) on every call but no network and no Revit API — never put it in a
