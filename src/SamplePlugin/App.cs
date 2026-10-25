@@ -10,17 +10,29 @@ namespace SamplePlugin;
 /// <summary>
 /// Sample Plugin entry point (<see cref="IExternalApplication"/>).
 /// <para>
+/// How Revit finds this class: at startup Revit reads the bundle's <c>PackageContents.xml</c>,
+/// picks the component for its own version, opens that folder's <c>SamplePlugin.addin</c>,
+/// loads <c>SamplePlugin.dll</c> and creates the class named in <c>FullClassName</c> (this one).
+/// It then calls <see cref="OnStartup"/> once per session and <see cref="OnShutdown"/> when
+/// Revit closes. Commands (<see cref="IExternalCommand"/>) need no manifest entry of their
+/// own: the Ribbon button below names the command class, and Revit creates it on each click.
+/// </para>
+/// <para>
 /// Ribbon rules (same conventions as the Node.aec Connector):
 /// the button lives in the SHARED canonical <c>Node.aec</c> tab — this add-in never
 /// owns a tab of its own — inside its own <c>Sample Plugin</c> panel with a single
-/// <c>Hello World</c> push button. Tab creation tolerates only the "already exists"
-/// ArgumentException, panel/button insertion is idempotent, and AdWindows lifecycle
-/// hooks keep the tab deduplicated across add-in reloads.
+/// <c>Hello World</c> push button. One tab for every Node.aec plugin keeps the user's
+/// Ribbon short and puts every product they bought in one place. Tab creation tolerates
+/// only the "already exists" ArgumentException, panel/button insertion is idempotent,
+/// and AdWindows lifecycle hooks keep the tab deduplicated across add-in reloads.
 /// </para>
 /// <para>
 /// Deliberately contains no licensing calls: the Ribbon must come up even when the
-/// connector is missing. The license check lives at the top of
-/// <see cref="Commands.HelloCommand.Execute"/>.
+/// connector is missing, so the user can see the button and get the "why not" message
+/// on click. There is a .NET reason too: the runtime loads a referenced assembly when it
+/// first compiles a method that uses it, so a <c>Gate</c> call here would make a missing
+/// or broken licensing DLL fail the whole add-in at startup. The license check lives at
+/// the top of <see cref="Commands.HelloCommand.Execute"/>.
 /// </para>
 /// </summary>
 public class App : IExternalApplication
@@ -41,6 +53,11 @@ public class App : IExternalApplication
     /// Builds the Ribbon (tab → panel → button) and registers the dedup hooks.
     /// Any exception becomes a clean <see cref="Result.Failed"/> instead of a
     /// half-built Ribbon with no cause recorded.
+    /// <para>
+    /// Revit runs <c>OnStartup</c> on its UI thread while the splash screen is up, and waits
+    /// for every add-in before it shows the window. Keep it to Ribbon work only: no network
+    /// calls and no heavy file reads, or every Revit start gets slower for the user.
+    /// </para>
     /// </summary>
     /// <param name="application">Revit-provided handle to the Ribbon of this session.</param>
     /// <returns><see cref="Result.Succeeded"/> when the Ribbon is ready, otherwise <see cref="Result.Failed"/>.</returns>
@@ -92,6 +109,11 @@ public class App : IExternalApplication
     /// usually creates it first). Only the "name already in use / rejected" exception
     /// is treated as the expected add-in-reload state; every other failure propagates
     /// to the top guard of <see cref="OnStartup"/> — a bare catch would mask real errors.
+    /// <para>
+    /// The Revit API has no "does this tab exist?" query, so trying to create it and
+    /// accepting the "already exists" error is the standard way to share a tab. Add-ins
+    /// start in an order Revit does not guarantee, so every Node.aec add-in runs this.
+    /// </para>
     /// </summary>
     private static void EnsureTab(UIControlledApplication application)
     {
@@ -130,7 +152,13 @@ public class App : IExternalApplication
         return application.CreateRibbonPanel(tabName, panelName);
     }
 
-    /// <summary>Creates the <c>Hello World</c> push button descriptor bound to <see cref="HelloCommand"/>.</summary>
+    /// <summary>
+    /// Creates the <c>Hello World</c> push button descriptor bound to <see cref="HelloCommand"/>.
+    /// Revit stores the DLL path and the class name, and creates the command from them on
+    /// each click. <c>Assembly.Location</c> is the path this DLL was actually loaded from
+    /// (the bundle's <c>Contents\&lt;group&gt;\</c> folder), so it is right wherever the
+    /// plugin is installed; never hard-code it.
+    /// </summary>
     private static PushButtonData BuildHelloButtonData()
     {
         return new PushButtonData(
@@ -167,6 +195,12 @@ public class App : IExternalApplication
     /// <summary>
     /// Registers the AdWindows/Revit lifecycle hooks that keep the shared tab unique.
     /// Named static handlers with "-=" before "+=" so reloads don't stack delegates.
+    /// <para>
+    /// AdWindows (<c>Autodesk.Windows</c>) is the WPF library that draws Revit's Ribbon.
+    /// The Revit API can create tabs but cannot list or remove them; AdWindows can, which
+    /// is why deduplication goes through it. Removing a handler that was never added is a
+    /// no-op, so "-=" then "+=" always leaves exactly one subscription.
+    /// </para>
     /// </summary>
     private static void RegisterRibbonHooks(UIControlledApplication application)
     {
