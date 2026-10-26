@@ -26,8 +26,8 @@ building your own plugin, see [For plugin developers](#9-for-plugin-developers) 
 
 ## 1. What the Sample Plugin does
 
-The Sample Plugin adds one button, **Hello World**, to the **Node.aec** tab of the Revit
-Ribbon. Clicking it checks that your computer has a license for the product, then greets
+The Sample Plugin adds one button, **Sample Plugin**, to the **Node.aec** group on the
+**Node.aec** tab of the Revit Ribbon. Clicking it checks that your computer has a license for the product, then greets
 you and shows the license details. Without a license it explains why and offers to open
 the Node.aec Connector, where you fix it.
 
@@ -80,7 +80,7 @@ and tells you so on the versions page.
 ## 4. Using it
 
 1. Open Revit and click the **Node.aec** tab.
-2. In the **Sample Plugin** panel, click **Hello World**.
+2. In the **Node.aec** group, next to **Connector**, click **Sample Plugin**.
 
 With a valid license you see:
 
@@ -97,8 +97,9 @@ License (as reported by Node.aec):
 
 Your license key is never shown: it is your secret.
 
-The **Node.aec** tab is shared by every Node.aec product, so you may also see the Connector's
-**Node.aec** panel and the panels of other plugins you own.
+The **Node.aec** tab is shared by every Node.aec product. Each company has one group named
+after it; Node.aec's own products, like this one, sit in the **Node.aec** group with the
+Connector. You may also see the groups of other companies whose plugins you own.
 
 ---
 
@@ -120,7 +121,7 @@ link that opens the Node.aec Connector window.
 | *The local license date is invalid. Check this computer's date and time and try again.* | Fix the Windows date and time. |
 
 Other messages follow the same pattern: they say what is wrong and what to do. After fixing
-it, click **Hello World** again; there is no need to restart Revit.
+it, click **Sample Plugin** again; there is no need to restart Revit.
 
 ---
 
@@ -148,7 +149,7 @@ After that the dialog asks you to connect and synchronize.
 
 | Problem | What to do |
 |---|---|
-| The **Hello World** button does not appear | Run the installer again and check that your Revit version is checked. Make sure Revit was closed while installing. |
+| The **Sample Plugin** button does not appear | Run the installer again and check that your Revit version is checked. Make sure Revit was closed while installing. |
 | The installer stops with *"Close Autodesk Revit before continuing."* | Close every Revit window (check the Task Manager for `Revit.exe`), then run it again. |
 | The installer says *"Setup did not finish"* | Run it again with Revit closed. |
 | **Open Node.aec Connector...** does nothing | The Connector is not installed. Install it from its [product page](https://nodeaec.com.br/products/nodeaec-connector). |

@@ -36,8 +36,8 @@ Its comments explain why each piece is the way it is. Deep detail is in
    reference, copy or ship `NodeAec.Connector.dll`, never copy gate source code, and never
    make network calls in `OnStartup` or a command.
 3. **Fail closed.** No code path runs the paid feature without `IsLicensed == true`.
-4. **One shared Ribbon tab.** Every Node.aec plugin puts its own panel in the `Node.aec` tab
-   and never creates a tab of its own.
+4. **One shared Ribbon tab, one group per company.** Every Node.aec plugin puts its own panel
+   in the `Node.aec` tab, titled with the company name, and never creates a tab of its own.
 
 ## 1. Pick the path
 
@@ -58,9 +58,10 @@ user or the code already answers.
    registered before release.
 2. **Revit years.** Recommended: 2023-2027, the template's matrix. An existing plugin keeps
    the years it ships today unless the user wants more.
-3. **Panel name** inside the `Node.aec` tab, unique to the product (e.g. the product name).
-   Not `Conector` (the Connector's) and not `License`/`Licensing` (the Connector removes
-   those as legacy).
+3. **Company name** for the group title on the `Node.aec` tab, spelled exactly the same in
+   every plugin the company publishes (`--CompanyName`). The panel's internal name stays unique
+   to the product (the project name). Not `License`/`Licensing` (the Connector removes those
+   as legacy).
 4. **Which commands are paid.** Recommended: every user-facing command. The only usual
    exception is a command whose sole job is license recovery (opening the Connector).
 5. **Test machine.** Is the Connector installed with a signed-in, entitled account? Needed
@@ -81,10 +82,12 @@ user or the code already answers.
    `installer.iss` (fresh `AppId`, `ProductCode`, `UpgradeCode`), `AGENTS.md` and this skill.
 2. **Check the slug** in `HelloCommand.ProductSlug`. With several commands, move it to one
    shared static class.
-3. **Name the panel**: `PanelName` in `App.cs` (`-n` gave it the project name).
+3. **Check the group**: `CompanyName` in `App.cs` (`--CompanyName` set it) is the group title;
+   `PanelName` (`-n` gave it the project name) is internal and must stay unique to the plugin.
 4. **Add the real commands.** Copy `HelloCommand`'s first lines into each one and replace
    its body with the feature. Add one Ribbon button per command in `App.cs`
-   (`AddButtonIfMissing`, a unique internal button name each). Gate rules: §5.
+   (`AddButtonIfMissing`, an internal name `<Plugin>_<Command>` each; several commands fit
+   best in one `PulldownButton` named after the plugin). Gate rules: §5.
 5. **Build** the years the user ships (§7), then **package** (§6) and **validate** (§7).
 
 ## 4. Path C: learn from the sample
@@ -95,7 +98,7 @@ user or the code already answers.
    `App.cs`, `SamplePlugin.addin`, `SamplePlugin.csproj`, then the scripts. Explain to the
    user what each part does and why, from the comments; do not invent reasons.
 3. To run it: `scripts/release.ps1 -Version <csproj Version> -Install` (Revit closed), open
-   Revit, click **Node.aec > Sample Plugin > Hello World**. Without a license for
+   Revit, click **Node.aec > Sample Plugin** (in the **Node.aec** group, next to **Connector**). Without a license for
    `revit-sample-plugin` the blocked dialog is the expected result, and the point of the demo.
 4. To turn it into a real plugin, prefer Path A (fresh identity GUIDs). Copying the
    sample means renaming everything in the §8 mapping table by hand.
@@ -121,8 +124,9 @@ Detail and the full code: [`references/licensing-gate.md`](references/licensing-
 ## 6. Ribbon and packaging
 
 - **Ribbon** (as in `App.cs`): `CreateRibbonTab("Node.aec")` in a `try` that catches only
-  the "already exists" `ArgumentException`; get-or-create the panel; add a button only when
-  its internal name is missing; AdWindows dedup hooks with `-=` before `+=`. No licensing
+  the "already exists" `ArgumentException`; get-or-create the plugin's own panel and set its
+  `Title` to the company name (the Connector merges same-title panels into one group); add a
+  button only when its internal name is missing, internal names `<Plugin>_<Command>`; AdWindows dedup hooks with `-=` before `+=`. No licensing
   call in `App`.
 - **csproj**: `<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>` so Lite and
   its dependencies sit next to the plugin DLL; `<UseWPF>true</UseWPF>`; Revit API packages
@@ -157,8 +161,9 @@ Windows session. Report the cases the user still has to run instead of claiming 
 |---|---|
 | `ProductSlug = "revit-sample-plugin"` | Your registered slug |
 | Namespace and assembly `SamplePlugin` | Your project name |
-| Panel `Sample Plugin` | Your panel name |
-| Button `Hello World`, id `SamplePlugin_HelloWorld` | Your button text and a unique id |
+| Group title `CompanyName = "Node.aec"` | Your company name, the same in all your plugins |
+| Panel `SamplePlugin` (internal) | Your project name |
+| Button `Sample Plugin`, id `SamplePlugin_HelloWorld` | Your plugin's name, and ids `<Plugin>_<Command>` |
 | `SamplePlugin.Commands.HelloCommand` | Your gated command classes (all of them) |
 | `<AddInId>` in `SamplePlugin.addin` | A fresh GUID; never reuse another add-in's |
 | `AppId`, `ProductCode`, `UpgradeCode` in `scripts/` | Fresh GUIDs for your product |

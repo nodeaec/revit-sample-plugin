@@ -25,7 +25,7 @@ This README takes about five minutes. It explains what the sample does, how to r
 
 ## What this does
 
-**Sample Plugin** adds a single **Hello World** button to the shared **Node.aec** ribbon tab (panel **Sample Plugin**). Selecting it asks the license gate **compiled into the plugin itself** whether this machine is entitled to run the [`revit-sample-plugin`](https://nodeaec.com.br/products/revit-sample-plugin) product.
+**Sample Plugin** adds a single **Sample Plugin** button to the shared **Node.aec** ribbon tab, in the **Node.aec** group next to **Connector** (each company has one group; Node.aec's own products use this one). Selecting it asks the license gate **compiled into the plugin itself** whether this machine is entitled to run the [`revit-sample-plugin`](https://nodeaec.com.br/products/revit-sample-plugin) product.
 
 With a valid, active license, the command shows a greeting together with a license card: product name, license type, and expiry date. The license key is never shown: it is the user's secret.
 
@@ -36,7 +36,7 @@ In any other case — not signed in, no entitlement for this product, expired li
 Every command calls `Gate.Validate(ProductSlug)` as the first statement of `IExternalCommand.Execute` and honors the answer.
 
 ```
-Click Hello World
+Click Sample Plugin
   -> SamplePlugin.Commands.HelloCommand runs Gate.Validate(ProductSlug)
        -> reads the local lease file, verifies the Ed25519 signature
           offline against the anchors compiled into the package, no network

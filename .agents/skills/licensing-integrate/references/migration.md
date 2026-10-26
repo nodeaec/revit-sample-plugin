@@ -95,8 +95,9 @@ gate at the point where paid work starts, on Revit's UI thread, with the same di
 - Replace `CreateRibbonTab("<OldTab>")` with the shared-tab code from the sample's
   [`App.cs`](https://github.com/nodeaec/revit-sample-plugin/blob/main/src/SamplePlugin/App.cs)
   (`EnsureTab`, `GetOrCreatePanel`, `AddButtonIfMissing`, the dedup hooks).
-- Keep the existing panels and buttons; they move into the `Node.aec` tab under a panel
-  name unique to the product. Tell the user their users will find the buttons in the new
+- Keep the existing buttons; they move into the `Node.aec` tab, in one panel per plugin
+  (internal name unique to the product) titled with the company name, so all of the
+  company's plugins share one group. Rename button internal names to `<Plugin>_<Command>`. Tell the user their users will find the buttons in the new
   tab (worth a line in the release notes).
 - `App` gets no licensing call. Buttons stay enabled; the gate runs on click.
 

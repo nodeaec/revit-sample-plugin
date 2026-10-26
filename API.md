@@ -54,7 +54,7 @@ build. You pass a product slug, you receive a `Snapshot`, and you branch on
 | SSO login, license-key activation, lease sync/heartbeat (6 h background timer) | Declare the `NodeAec.Licensing.Lite` package (§3) — it compiles into your plugin |
 | DPAPI storage of the lease (Hub writes it) + Ed25519 signature verification (Lite reads it) | Declare **one** product slug constant ([`revit-sample-plugin`](https://nodeaec.com.br/products/revit-sample-plugin)) — the one thing to change when adapting this sample |
 | The gate: `Gate.Validate(slug)` / `OpenConnector()` (both Lite, offline) | Call `Gate.Validate(ProductSlug)` at command entry and branch **only** on `IsLicensed` (§2, §9) |
-| Canonical Ribbon tab `Node.aec`, its `Node.aec` panel, tab deduplication | Add its own **panel** (`Sample Plugin`) and button (`Hello World`) inside that shared tab — never a plugin-owned tab (§6) |
+| Canonical Ribbon tab `Node.aec`, its `Node.aec` panel, tab deduplication | Add its own **panel** (`SamplePlugin`, titled with the company name: one group per company) and button (`Sample Plugin`) inside that shared tab — never a plugin-owned tab (§6) |
 | The connector UI (one window: account, plugins with install/update, catalog) | Show the returned `Message` verbatim on failure and offer to open the connector |
 | Its log file `%APPDATA%\NodeAec\connector.log` | Fail closed: any inability to reach the gate ⇒ deny the feature (§9) |
 
@@ -372,8 +372,13 @@ a panel inside it. The rules below keep that tab from duplicating when Revit
 reloads add-ins.
 
 Canonical constants (connector `App.cs`): `App.TabName = "Node.aec"`, `App.PanelName =
-"Node.aec"`. The sample adds panel **`Sample Plugin`** with button **`Hello World`** inside
-the shared tab.
+"Node.aec"`. The sample adds its own panel **`SamplePlugin`**, titled **`Node.aec`** (its company, so it
+joins the Connector's group), with button **`Sample Plugin`** inside the shared tab. Each
+company has **one group**: every plugin of the company creates its own panel (internal name
+unique to the plugin) and sets `panel.Title` to the company name; the Connector (0.4.0+)
+merges same-title panels into one group, keeps each plugin's buttons together (internal
+names `<Plugin>_<Command>`), and orders groups and plugins alphabetically, its own group
+first.
 
 **RECOMMENDED partner pattern (exactly what `src/SamplePlugin/App.cs` does):** keep your
 `IExternalApplication` **free of every Node.aec Connector API call**. Build the shared tab
@@ -402,6 +407,7 @@ defensive fallback if you already accept the load dependency.
 | **MUST** use the single shared tab `Node.aec` | Connector creates it in `Initialize` via `application.CreateRibbonTab(TabName)`; you create it only defensively (below) |
 | **MUST NOT** create a plugin-owned tab | No second tab per plugin — ever. Panel thematically inside `Node.aec` instead |
 | **MUST** catch tab-creation failure with a **filtered** exception | `catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ArgumentException \|\| ex is ArgumentException)` — "tab already exists" is the *only* expected failure; a bare `catch {}` masks real errors (the connector itself explicitly rejects bare catches) |
+| **MUST** title the panel with the company name | `panel.Title = CompanyName`, spelled the same in every plugin of the company. Never use the company name as the panel *name*: Revit refuses a name another add-in already created |
 | **MUST** insert panel/button **idempotently** | Panel: `GetRibbonPanels(tab).FirstOrDefault(p => p.Name == panelName OrdinalIgnoreCase) ?? CreateRibbonPanel(tab, panelName)`. Button: scan `panel.GetItems()` by `Name` before `AddItem`. Revit add-in reloads (Add-In Manager) otherwise throw `ArgumentException` or duplicate buttons. The connector's helpers doing this are **`private`** (`GetOrCreatePanel`, `AddButtonIfMissing`, `AddStackedButtonsIfMissing`) and `RibbonDecisions` is **`internal`** — **you must replicate the logic**, you cannot call them |
 | **MUST** register AdWindows dedup hooks | `ControlledApplication.ApplicationInitialized` and `ComponentManager.UIElementActivated`, each with `-=` **before** `+=` on the named static handler so reloaded add-ins don't stack delegates. Handlers re-run **your local** dedup (replicated algorithm below): merge ghost/duplicate `Node.aec` tabs (keep first, move missing panels, set `duplicateTab.IsVisible = false` and remove it) — connector-free, per the recommended pattern. Stripping rogue `License`/`Licensing` tabs is the connector's `CleanRogueRibbonElements()` job: its own hooks already do it, replicating/calling it is optional (next row) |
 | **MAY** (OPTIONAL) call the connector's public dedup helpers | `NodeAec.Connector.App.DeduplicateRibbonTabs(string targetTitle)` / `NodeAec.Connector.App.CleanRogueRibbonElements()` are `public static` and swallow their own errors, **but calling them loads `NodeAec.Connector` into your process at Ribbon time** (JIT) — convenience vs connector-free startup, see the tradeoff above. **[Uncertain]** public-but-undocumented partner API; the sample's `App.cs` does **not** call them |
@@ -410,7 +416,7 @@ defensive fallback if you already accept the load dependency.
 | **MUST** keep `OnStartup` non-blocking | No network, no heavy I/O on the Ribbon thread; wrap everything in a top guard returning `Result.Failed` rather than letting exceptions escape half-built |
 | **MUST NOT** produce ghost tabs/panels | Duplicate tabs come from add-in reloads; the hooks above are the supported fix, not manual `Tabs.Remove` calls outside `try/catch` |
 
-### Minimal sketch (panel `Sample Plugin`, button `Hello World`) — mirrors `src/SamplePlugin/App.cs`
+### Minimal sketch (group `Node.aec`, button `Sample Plugin`) — mirrors `src/SamplePlugin/App.cs`
 
 ```csharp
 // Requires: using Autodesk.Windows;   (AdWindows — ComponentManager)
@@ -421,9 +427,10 @@ public class App : IExternalApplication
 {
     // Shared canonical tab — THE tab. Never a plugin-owned one.
     public const string TabName = "Node.aec";   // string copy of the convention; no type use
-    public const string PanelName = "Sample Plugin";
-    public const string ButtonId = "SamplePlugin_HelloWorld";
-    public const string ButtonText = "Hello World";
+    public const string CompanyName = "Node.aec";   // group title: your company, same in all your plugins
+    public const string PanelName = "SamplePlugin";  // internal, unique to this plugin
+    public const string ButtonId = "SamplePlugin_HelloWorld";   // "<Plugin>_" keeps your buttons together
+    public const string ButtonText = "Sample\nPlugin";
 
     public Result OnStartup(UIControlledApplication application)
     {
@@ -441,6 +448,7 @@ public class App : IExternalApplication
             var panel = application.GetRibbonPanels(TabName)
                 .FirstOrDefault(p => string.Equals(p.Name, PanelName, StringComparison.OrdinalIgnoreCase))
                 ?? application.CreateRibbonPanel(TabName, PanelName);
+            panel.Title = CompanyName;   // the Connector merges same-title panels into one group
 
             // 3. Idempotent button insertion (connector's AddButtonIfMissing is private).
             if (!panel.GetItems().Any(i => string.Equals(i.Name, ButtonId, StringComparison.OrdinalIgnoreCase)))
@@ -487,8 +495,8 @@ public class App : IExternalApplication
                 foreach (var p in dup.Panels.ToList())
                 {
                     dup.Panels.Remove(p);
+                    // Same id = leftover copy. Same title = same company's other plugin: keep it.
                     bool already = primary.Panels.Any(q =>
-                        string.Equals(q.Source?.Title, p.Source?.Title, StringComparison.OrdinalIgnoreCase) ||
                         string.Equals(q.Source?.Id, p.Source?.Id, StringComparison.OrdinalIgnoreCase));
                     if (!already) primary.Panels.Add(p);            // move, don't drop panels
                 }

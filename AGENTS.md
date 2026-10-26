@@ -44,7 +44,7 @@ security boundary.
 | Path | Role |
 |---|---|
 | `src/SamplePlugin/SamplePlugin.csproj` | SDK-style project: Revit-year matrix, the `NodeAec.Licensing.Lite` `PackageReference`, per-year `bin\`/`obj\` isolation. Header comment documents the build commands — keep it in sync with reality. ([source](https://github.com/nodeaec/revit-sample-plugin/blob/main/src/SamplePlugin/SamplePlugin.csproj)) |
-| `src/SamplePlugin/App.cs` | `IExternalApplication`. Builds the shared ribbon: `Node.aec` tab (defensive create), panel `Sample Plugin`, button `Hello World`, local tab-dedup replica + AdWindows hooks. **Contains zero Node.aec Connector API calls** — by design. ([source](https://github.com/nodeaec/revit-sample-plugin/blob/main/src/SamplePlugin/App.cs)) |
+| `src/SamplePlugin/App.cs` | `IExternalApplication`. Builds the shared ribbon: `Node.aec` tab (defensive create), own panel `SamplePlugin` titled with the company group `Node.aec`, button `Sample Plugin`, local tab-dedup replica + AdWindows hooks. **Contains zero Node.aec Connector API calls** — by design. ([source](https://github.com/nodeaec/revit-sample-plugin/blob/main/src/SamplePlugin/App.cs)) |
 | `src/SamplePlugin/Commands/HelloCommand.cs` | `SamplePlugin.Commands.HelloCommand`. **The whole integration**: the `ProductSlug` constant, `Gate.Validate(ProductSlug)` as the first statement, the blocked dialog (`gate.GetMessage(language)` + `Gate.OpenConnector()` link + `Result.Cancelled`), and the licensed greeting. ([source](https://github.com/nodeaec/revit-sample-plugin/blob/main/src/SamplePlugin/Commands/HelloCommand.cs)) |
 | `src/SamplePlugin/SamplePlugin.addin` | Revit manifest with relative `<Assembly>SamplePlugin.dll</Assembly>`. Packaging copies it next to the DLL in each `Contents\<group>\` folder of `SamplePlugin.bundle`. ([source](https://github.com/nodeaec/revit-sample-plugin/blob/main/src/SamplePlugin/SamplePlugin.addin)) |
 | `scripts/release.ps1` | Release pipeline (mirrors the connector's): builds the three compatibility groups (floor years 2023 / 2025 / 2027), stages one `SamplePlugin.bundle` (`PackageContents.xml` + `NodeAec.product.json` + `Contents\<group>\`), zips it with a sha256, and compiles the single Setup.exe via `installer.iss` when ISCC.exe is present. `powershell -ExecutionPolicy Bypass -File scripts/release.ps1 -Version 0.4.0 [-Install]` (`-Version` is required and must match the csproj; `-Install` copies the bundle to `%ProgramData%\Autodesk\ApplicationPlugins\`). |
@@ -66,7 +66,7 @@ security boundary.
 | G1 | **Validate at the entry of EVERY command.** | `Gate.Validate(ProductSlug)` is the first statement of each `IExternalCommand.Execute`. One call per execution — it does disk I/O; never in per-element loops or `DynamicUpdaters` (`API.md` §7 "Threading & Revit API-context rules"). |
 | G2 | **Decide ONLY on the license boolean** (`Snapshot.IsLicensed`). | Never string-match the message. `Snapshot.Reason` (`GateReason`) may drive logs or UI tweaks, never whether the command runs (`API.md` §5 "Status / reason taxonomy"). `LicenseType`/`ProductName`/`ExpiresAt` are display-only and `null` on failure; `LicenseKey` is the user's secret — never show or log it. |
 | G3 | **Never copy `NodeAec.Connector.dll` — Lite travels together.** | The Hub DLL never enters the add-in folder, `release/`, or `stage/` — the project carries no reference to it at all. The Lite assembly + its deps (`BouncyCastle.Cryptography`, net48 `System.Text.Json`/`ProtectedData`) DO ship with the plugin via `CopyLocalLockFileAssemblies=true`. Same rule family as never shipping `RevitAPI*.dll` (`API.md` §13 "Migrating an existing plugin to Lite", §14). |
-| G4 | **Never create a plugin-owned ribbon tab.** | One shared `Node.aec` tab; a plugin adds its own panel (`Sample Plugin`) and button (`Hello World`) inside it (`API.md` §6 "Ribbon integration conventions"). |
+| G4 | **Never create a plugin-owned ribbon tab.** | One shared `Node.aec` tab; a plugin adds its own panel (`SamplePlugin`, titled with the company name `Node.aec`, one group per company) and button (`Sample Plugin`) inside it (`API.md` §6 "Ribbon integration conventions"). |
 | G5 | **Never call Node.aec HTTP APIs and never build login/license-manager UI.** | A plugin does local, offline validation only; the connector owns SSO, sync, heartbeat, and its UI. `ConnectorApiClient` is Hub-internal (`API.md` §1 "Overview & responsibility split", §4 "Public integration surface"). |
 | G6 | **The upstream connector repo is READ-ONLY.** | `../revit-connector` (github.com/nodeaec/revit-connector): never write, never "fix" it from this repo's sessions (§10). |
 | G7 | **Code wins over docs — and code changes update docs in the SAME change.** | Any change to `src/SamplePlugin/*` updates `API.md` **and** `.agents/skills/licensing-integrate/SKILL.md` **and** `README.md` together (table in §9, migration docs in `API.md` §§13–14 included). Never land a code-only or doc-only behavioral change. |
@@ -84,8 +84,9 @@ Use these exact values and names everywhere — docs, code, dialogs, commits. Ne
 | Product slug (the ONE constant a plugin changes when adapting) | [`revit-sample-plugin`](https://nodeaec.com.br/products/revit-sample-plugin) |
 | Plugin display name | `Sample Plugin` |
 | Ribbon tab (shared, owned by the connector) | `Node.aec` |
-| Ribbon panel (this plugin's) | `Sample Plugin` |
-| Ribbon button | `Hello World` |
+| Ribbon group title (company) | `Node.aec` (`CompanyName`) |
+| Ribbon panel (internal, this plugin's) | `SamplePlugin` |
+| Ribbon button | `Sample Plugin` (id `SamplePlugin_HelloWorld`) |
 | Recommended ribbon pattern | Local idempotent dedup replica + AdWindows hooks (`ApplicationInitialized`, `UIElementActivated`, `-=` before `+=`). The connector's public `DeduplicateRibbonTabs`/`CleanRogueRibbonElements` are documented **OPTIONAL helpers** with a JIT-load tradeoff — calling them pulls `NodeAec.Connector` into your process at ribbon time. |
 | Packaging | One bundle `%ProgramData%\Autodesk\ApplicationPlugins\SamplePlugin.bundle\`: `PackageContents.xml` (one component per Revit year) + `Contents\<group>\SamplePlugin.addin` with relative `<Assembly>SamplePlugin.dll</Assembly>` |
 | Build | SDK-style csproj; `-p:RevitYear=2023..2027` → `net48` / `net8.0-windows` / `net10.0-windows` (default `2026`); `NodeAec.Licensing.Lite` via NuGet restore |
@@ -213,8 +214,8 @@ Cross-reference `API.md` **by these section titles** (they are stable):
 Contract in one paragraph: add the `NodeAec.Licensing.Lite` package (never
 copy the Hub DLL — Lite compiles in and travels with your payload), declare one `ProductSlug` constant, call `Gate.Validate(ProductSlug)` at the
 entry of every command, branch only on `IsLicensed`, render `gate.GetMessage(language)` verbatim with
-an `OpenConnector()` link + `Result.Cancelled` on failure, add panel `Sample Plugin`
-with button `Hello World` to the shared `Node.aec` tab using the local idempotent
+an `OpenConnector()` link + `Result.Cancelled` on failure, add panel `SamplePlugin`
+titled with the company name, with button `Sample Plugin`, to the shared `Node.aec` tab using the local idempotent
 replica + AdWindows hooks, ship one `.bundle` whose `Contents\<group>\` manifests use a
 relative `Assembly`, and build the `RevitYear` matrix.
 
