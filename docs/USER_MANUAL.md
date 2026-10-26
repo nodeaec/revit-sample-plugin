@@ -1,6 +1,6 @@
 # User Manual — Sample Plugin
 
-> **Applies to:** Sample Plugin 0.3.0 · **Updated:** October 2026
+> **Applies to:** Sample Plugin 0.4.0 · **Updated:** October 2026
 > **Platform:** Windows 10/11 (64-bit) · Autodesk Revit 2023–2027 (one installer for every version)
 > **Product page:** <https://nodeaec.com.br/products/revit-sample-plugin>
 
@@ -53,7 +53,7 @@ itself never connects to the internet.
 
 1. **Close Autodesk Revit.** The installer refuses to continue while Revit is open
    (*"Close Autodesk Revit before continuing."*), because it has to replace files Revit keeps in use.
-2. Run `SamplePlugin-0.3.0-Setup.exe`.
+2. Run `SamplePlugin-0.4.0-Setup.exe`, or click **Instalar** next to Sample Plugin in the Node.aec Connector window (it downloads and runs the same installer).
 3. On the **Autodesk Revit versions** page, check the Revit versions that should load the
    plugin. Versions installed on this computer are already checked and marked *installed*.
    You can also check a version you will install later. At least one must be checked.
@@ -67,11 +67,12 @@ and tells you so on the versions page.
 
 **For IT teams:**
 
-- Silent install for chosen versions: `SamplePlugin-0.3.0-Setup.exe /VERYSILENT /RevitYears=2025,2026`.
+- Silent install for chosen versions: `SamplePlugin-0.4.0-Setup.exe /VERYSILENT /RevitYears=2025,2026`.
   Without `/RevitYears` it keeps the previous choice, or every installed Revit version on a
   first install.
-- Without the installer: extract `SamplePlugin-0.3.0.bundle.zip` into
+- Without the installer: extract `SamplePlugin-0.4.0.bundle.zip` into
   `C:\ProgramData\Autodesk\ApplicationPlugins\` (enables every Revit version).
+- `/WaitForRevit` makes the installer wait for Revit to close instead of refusing to run.
 - Each file ships with a `.sha256` checksum.
 
 ---
@@ -97,7 +98,7 @@ License (as reported by Node.aec):
 Your license key is never shown: it is your secret.
 
 The **Node.aec** tab is shared by every Node.aec product, so you may also see the Connector's
-**Conector** panel and the panels of other plugins you own.
+**Node.aec** panel and the panels of other plugins you own.
 
 ---
 
@@ -106,7 +107,7 @@ The **Node.aec** tab is shared by every Node.aec product, so you may also see th
 If the license cannot be confirmed, the command does not run. A dialog titled
 **Sample Plugin — License Required** shows one sentence that names the exact reason and
 what to do, in Revit's language (Portuguese or English), and an **Open Node.aec Connector...**
-link that opens the Connector's **Minha Conta** window.
+link that opens the Node.aec Connector window.
 
 | The dialog says (English) | What to do |
 |---|---|
@@ -133,7 +134,10 @@ After that the dialog asks you to connect and synchronize.
 
 ## 7. Updating, changing Revit versions, uninstalling
 
-- **Update:** close Revit and run the newer installer. It starts with the versions you chose last time.
+- **Update:** open the Node.aec Connector window (**Connector** button). When a newer version is
+  published, the Sample Plugin row shows **Atualizar**: click it, save your work and close
+  Revit, and the update installs itself with the Revit versions you chose last time. You can
+  also close Revit and run the newer installer yourself.
 - **Add or remove a Revit version:** run the installer again and change the checkboxes.
 - **Uninstall:** close Revit, then **Settings → Apps → Sample Plugin → Uninstall**. This
   removes it from every Revit version. Your Node.aec account and licenses are not affected.

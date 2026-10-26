@@ -2,7 +2,7 @@
 ;
 ; ONE Setup.exe for every supported Revit year (2023-2027). Compiled by
 ; scripts/release.ps1:
-;   ISCC.exe /DAppVersion=0.3.0 /DAppVersionNum=0.3.0
+;   ISCC.exe /DAppVersion=0.4.0 /DAppVersionNum=0.4.0
 ;            /DPayloadStage=<abs path>\release\stage\SamplePlugin.bundle
 ;            /O<abs path>\release scripts\installer.iss
 ;
@@ -22,6 +22,11 @@
 ;
 ; Silent installs: /RevitYears=2023,2026 picks the years; without it, the previous
 ; choice is kept, or every installed Revit year on a first install.
+;
+; /WaitForRevit: when Revit is open, wait for it to close instead of refusing. The
+; Node.aec Connector starts installs and updates with /SILENT /WaitForRevit from inside
+; Revit. NodeAec.product.json (written by release.ps1) tells the Connector which
+; Node.aec product and version this bundle is.
 ;
 ; Migration: installs made by the older per-group installers (Windows Settings >
 ; Apps entries named "Sample Plugin - Revit <group>", payload in
@@ -49,10 +54,10 @@
 ; NOTE: this file must stay plain ASCII (ISCC reads scripts as ANSI/UTF-8-BOM).
 
 #ifndef AppVersion
-  #error AppVersion is required: compile with /DAppVersion=0.3.0 (same as <Version> in the plugin csproj; release.ps1 passes it).
+  #error AppVersion is required: compile with /DAppVersion=0.4.0 (same as <Version> in the plugin csproj; release.ps1 passes it).
 #endif
 #ifndef AppVersionNum
-  #error AppVersionNum is required: compile with /DAppVersionNum=0.3.0 (numeric x.y.z form of AppVersion).
+  #error AppVersionNum is required: compile with /DAppVersionNum=0.4.0 (numeric x.y.z form of AppVersion).
 #endif
 #ifndef PayloadStage
   #define PayloadStage "..\release\stage\SamplePlugin.bundle"
@@ -67,7 +72,9 @@
 #define AppIdGuid "a61b450f-4226-4edc-ad8d-42613b1555a5"
 #define ProductCode "{E6D697B0-157B-44DD-B09B-48B0C0DAE14C}"
 #define UpgradeCode "{979CC8B7-666B-446F-8CA1-DC5E9AAED38E}"
-#define ProductUrl "https://nodeaec.com.br/products/revit-sample-plugin"
+; Node.aec product slug: the same value as ProductSlug in Commands\HelloCommand.cs.
+#define ProductSlug "revit-sample-plugin"
+#define ProductUrl "https://nodeaec.com.br/products/" + ProductSlug
 
 [Setup]
 ; Inno's constant parser needs the literal "{" escaped as "{{".
@@ -132,6 +139,8 @@ brazilianportuguese.LegacyRemoveFailed=Nao foi possivel remover a instalacao ant
 english.LegacyRemoveFailed=Could not remove the previous {#DisplayName} install in %1.%nClose Autodesk Revit and run Setup again.
 brazilianportuguese.WriteFailed=Nao foi possivel gravar o arquivo PackageContents.xml do add-in. Execute o instalador novamente.
 english.WriteFailed=Could not write the add-in's PackageContents.xml. Run Setup again.
+brazilianportuguese.WaitForRevitPrompt=Feche o Revit para continuar a instalacao.
+english.WaitForRevitPrompt=Close Revit to continue installation.
 brazilianportuguese.FinishFailedHeading=A instalacao nao foi concluida
 english.FinishFailedHeading=Setup did not finish
 brazilianportuguese.FinishFailedText=O add-in nao foi configurado para o Revit. Execute o instalador novamente.
@@ -146,6 +155,7 @@ Source: "{#PayloadStage}\Contents\2023-2024\*"; DestDir: "{app}\Contents\2023-20
 Source: "{#PayloadStage}\Contents\2025-2026\*"; DestDir: "{app}\Contents\2025-2026"; Flags: recursesubdirs createallsubdirs ignoreversion; Check: GroupSelected('2025-2026')
 Source: "{#PayloadStage}\Contents\2027\*"; DestDir: "{app}\Contents\2027"; Flags: recursesubdirs createallsubdirs ignoreversion; Check: GroupSelected('2027')
 Source: "{#PayloadStage}\README.md"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "{#PayloadStage}\NodeAec.product.json"; DestDir: "{app}"; Flags: ignoreversion
 ; Post-install notes per language (embedded; the InfoAfter page loads the one
 ; matching the wizard language).
 Source: "installer-after.txt"; Flags: dontcopy
@@ -539,6 +549,87 @@ begin
   end;
 end;
 
+var
+  WaitingForRevit: Boolean;
+  WaitForRevitCancelled: Boolean;
+
+// While Setup waits for Revit, Cancel stops the wait (PrepareToInstall then reports that
+// Revit must close) instead of asking to exit Setup. Elsewhere Cancel behaves as usual.
+procedure CancelButtonClick(CurPageID: Integer; var Cancel, Confirm: Boolean);
+begin
+  if WaitingForRevit then
+  begin
+    WaitForRevitCancelled := True;
+    Cancel := False;
+    Confirm := False;
+  end;
+end;
+
+// True when a switch with Name (e.g. 'WaitForRevit' for /WaitForRevit or -WaitForRevit) is passed.
+function HasParam(const Name: string): Boolean;
+var
+  I: Integer;
+  Param: string;
+begin
+  Result := False;
+  for I := 1 to ParamCount do
+  begin
+    Param := ParamStr(I);
+    if (CompareText(Param, '/' + Name) = 0) or
+       (CompareText(Param, '-' + Name) = 0) or
+       (Pos(Uppercase('/' + Name + '='), Uppercase(Param)) = 1) or
+       (Pos(Uppercase('-' + Name + '='), Uppercase(Param)) = 1) then
+    begin
+      Result := True;
+      Exit;
+    end;
+  end;
+end;
+
+// Waits until Revit.exe exits (the Node.aec Connector starts updates with
+// /SILENT /WaitForRevit while Revit is still open). /VERYSILENT waits with no UI;
+// otherwise a progress page shows the wait prompt. False when the user cancels.
+function WaitForRevitToClose(): Boolean;
+var
+  ProgressPage: TOutputMarqueeProgressWizardPage;
+  I: Integer;
+begin
+  Result := True;
+  WaitForRevitCancelled := False;
+
+  if HasParam('VERYSILENT') then
+  begin
+    while IsProcessRunning('Revit.exe') do
+      Sleep(1000);
+    Exit;
+  end;
+
+  ProgressPage := CreateOutputMarqueeProgressPage(SetupMessage(msgSetupAppTitle), CustomMessage('WaitForRevitPrompt'));
+  ProgressPage.SetText(CustomMessage('WaitForRevitPrompt'), '');
+  ProgressPage.Show();
+  WaitingForRevit := True;
+  WizardForm.CancelButton.Enabled := True;
+  try
+    while IsProcessRunning('Revit.exe') do
+    begin
+      ProgressPage.Animate();
+      for I := 1 to 10 do
+      begin
+        if WaitForRevitCancelled then
+        begin
+          Result := False;
+          Exit;
+        end;
+        Sleep(100);
+        ProgressPage.Animate();
+      end;
+    end;
+  finally
+    WaitingForRevit := False;
+    ProgressPage.Hide();
+  end;
+end;
+
 // Runs before any file is copied: Revit must be closed, and the legacy
 // per-group installs are removed so Revit never loads the plugin twice.
 function PrepareToInstall(var NeedsRestart: Boolean): String;
@@ -551,8 +642,11 @@ begin
     Exit;
   if IsProcessRunning('Revit.exe') then
   begin
-    Result := CustomMessage('RevitMustClose');
-    Exit;
+    if (not HasParam('WaitForRevit')) or (not WaitForRevitToClose()) then
+    begin
+      Result := CustomMessage('RevitMustClose');
+      Exit;
+    end;
   end;
   Failed := RemoveLegacyInstalls();
   if Failed <> '' then

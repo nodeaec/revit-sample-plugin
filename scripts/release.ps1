@@ -37,8 +37,8 @@
                                         the user picks the Revit years
 
 .EXAMPLE
-  powershell -ExecutionPolicy Bypass -File scripts/release.ps1 -Version 0.3.0
-  powershell -ExecutionPolicy Bypass -File scripts/release.ps1 -Version 0.3.0 -Install
+  powershell -ExecutionPolicy Bypass -File scripts/release.ps1 -Version 0.4.0
+  powershell -ExecutionPolicy Bypass -File scripts/release.ps1 -Version 0.4.0 -Install
 
   -Version has no default and must equal <Version> in SamplePlugin.csproj, so the
   DLL, the zip and the installer always carry the same version.
@@ -58,10 +58,10 @@ if ($args.Count -gt 0) {
   throw "Unrecognized arguments: $($args -join ' '). Usage: -Version <x.y.z> [-Install] [-SkipBuild]."
 }
 if ([string]::IsNullOrWhiteSpace($Version)) {
-  throw "-Version is required (e.g. -Version 0.3.0). Use the same value as <Version> in src\SamplePlugin\SamplePlugin.csproj."
+  throw "-Version is required (e.g. -Version 0.4.0). Use the same value as <Version> in src\SamplePlugin\SamplePlugin.csproj."
 }
 if ($Version -notmatch '^\d+\.\d+(\.\d+){0,2}([.-][0-9A-Za-z]+)*$') {
-  throw "Invalid version: '$Version'. Use SemVer (e.g. 0.3.0 or 0.3.0-rc1)."
+  throw "Invalid version: '$Version'. Use SemVer (e.g. 0.4.0 or 0.4.0-rc1)."
 }
 
 # Compatibility group -> Revit years. The first year of each group is the build year.
@@ -78,6 +78,10 @@ $DisplayName = "Sample Plugin"
 $Description = "Node.aec Sample Plugin: licensed Hello World for Autodesk Revit"
 $ProductCode = "{E6D697B0-157B-44DD-B09B-48B0C0DAE14C}"
 $UpgradeCode = "{979CC8B7-666B-446F-8CA1-DC5E9AAED38E}"
+# Node.aec product slug: the same value as ProductSlug in Commands\HelloCommand.cs and
+# installer.iss. NodeAec.product.json carries it so the Node.aec Connector can match this
+# installed bundle to the product on the account and offer its updates.
+$ProductSlug = "revit-sample-plugin"
 
 # The script lives in <repo>\scripts: the repo root holds src/.
 $RepoRoot = Split-Path $PSScriptRoot -Parent
@@ -171,6 +175,9 @@ foreach ($group in $RevitYearGroups.Keys) {
 
 $allYears = @($RevitYearGroups.Values | ForEach-Object { $_ })
 Write-PackageContents (Join-Path $BundleStage "PackageContents.xml") $allYears
+# Read by the Node.aec Connector, not by Revit (Revit ignores extra files in a bundle).
+$productJson = "{`"productSlug`": `"$ProductSlug`", `"version`": `"$Version`"}"
+[IO.File]::WriteAllText((Join-Path $BundleStage "NodeAec.product.json"), $productJson, (New-Object Text.UTF8Encoding($false)))
 if (Test-Path (Join-Path $RepoRoot "README.md")) {
   Copy-Item (Join-Path $RepoRoot "README.md") (Join-Path $BundleStage "README.md") -Force
 }

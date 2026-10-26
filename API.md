@@ -54,8 +54,8 @@ build. You pass a product slug, you receive a `Snapshot`, and you branch on
 | SSO login, license-key activation, lease sync/heartbeat (6 h background timer) | Declare the `NodeAec.Licensing.Lite` package (§3) — it compiles into your plugin |
 | DPAPI storage of the lease (Hub writes it) + Ed25519 signature verification (Lite reads it) | Declare **one** product slug constant ([`revit-sample-plugin`](https://nodeaec.com.br/products/revit-sample-plugin)) — the one thing to change when adapting this sample |
 | The gate: `Gate.Validate(slug)` / `OpenConnector()` (both Lite, offline) | Call `Gate.Validate(ProductSlug)` at command entry and branch **only** on `IsLicensed` (§2, §9) |
-| Canonical Ribbon tab `Node.aec`, its `Conector` panel, tab deduplication | Add its own **panel** (`Sample Plugin`) and button (`Hello World`) inside that shared tab — never a plugin-owned tab (§6) |
-| The connector UI (account, plugins, catalog windows) | Show the returned `Message` verbatim on failure and offer to open the connector |
+| Canonical Ribbon tab `Node.aec`, its `Node.aec` panel, tab deduplication | Add its own **panel** (`Sample Plugin`) and button (`Hello World`) inside that shared tab — never a plugin-owned tab (§6) |
+| The connector UI (one window: account, plugins with install/update, catalog) | Show the returned `Message` verbatim on failure and offer to open the connector |
 | Its log file `%APPDATA%\NodeAec\connector.log` | Fail closed: any inability to reach the gate ⇒ deny the feature (§9) |
 
 **Non-goals for a plugin** (by connector design): no HTTP client, no cloud auth, no license
@@ -372,7 +372,7 @@ a panel inside it. The rules below keep that tab from duplicating when Revit
 reloads add-ins.
 
 Canonical constants (connector `App.cs`): `App.TabName = "Node.aec"`, `App.PanelName =
-"Conector"`. The sample adds panel **`Sample Plugin`** with button **`Hello World`** inside
+"Node.aec"`. The sample adds panel **`Sample Plugin`** with button **`Hello World`** inside
 the shared tab.
 
 **RECOMMENDED partner pattern (exactly what `src/SamplePlugin/App.cs` does):** keep your
@@ -834,8 +834,9 @@ maintenance burden, divergent versions). Exactly one integration path is authori
 
 - **Gate surface verified against `NodeAec.Licensing.Lite 0.3.0`** — every
   `Gate`/`Snapshot`/`GateReason` identifier, signature and verbatim message above was
-  checked against the Lite source. The `NodeAec.Templates.RevitPlugin` template 0.3.0
-  generates this same shape, bundle installer included (0.2.0 generated the same code with
+  checked against the Lite source. The `NodeAec.Templates.RevitPlugin` template 0.4.0
+  generates this same shape, bundle installer included, with `NodeAec.product.json` and
+  `/WaitForRevit` (0.3.0 had neither; 0.2.0 generated the same code with
   per-group `.addin` installers; 0.1.0 generated an older wrapper class, pinned a Lite version
   that is not on NuGet.org, and wrote a `.addin` with invalid XML).
 - **Hub behavior verified against revit-connector@7366482** — the Hub-side facts

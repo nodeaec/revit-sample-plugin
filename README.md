@@ -5,7 +5,7 @@ One Revit button that demonstrates how to sell through the Node.aec platform: wi
 This README takes about five minutes. It explains what the sample does, how to run it, and how to apply the same pattern to your own plugin. The license check is a fail-closed gate — `Gate.Validate(ProductSlug)` is the first statement of `IExternalCommand.Execute` — and the license package is a NuGet `PackageReference` to `NodeAec.Licensing.Lite`.
 
 > **Status:** the `src/` code uses `NodeAec.Licensing.Lite` 0.3.0 from NuGet.org, and
-> `dotnet new nodeaec-revit-plugin` (template 0.3.0 or later) generates the same shape, bundle installer included.
+> `dotnet new nodeaec-revit-plugin` (template 0.4.0 or later) generates the same shape, bundle installer included.
 > Template 0.1.0 generated an older wrapper class and a manifest with invalid XML: update
 > with `dotnet new install NodeAec.Templates.RevitPlugin --force`.
 
